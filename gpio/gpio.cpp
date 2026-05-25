@@ -2,33 +2,57 @@
 
 #if (BOARD_REV==0)
 
-#define PATH_TO_GPIO_IN_0 "/sys/class/gpio/gpio480/value"
-#define PATH_TO_GPIO_IN_1 "/sys/class/gpio/gpio481/value"
-#define PATH_TO_GPIO_IN_2 "/sys/class/gpio/gpio482/value"
-#define PATH_TO_GPIO_IN_3 "/sys/class/gpio/gpio483/value"
-#define PATH_TO_GPIO_IN_4 "/sys/class/gpio/gpio484/value"
-#define PATH_TO_GPIO_IN_5 "/sys/class/gpio/gpio485/value"
-#define PATH_TO_GPIO_IN_6 "/sys/class/gpio/gpio486/value"
-#define PATH_TO_GPIO_IN_7 "/sys/class/gpio/gpio487/value"
-#define PATH_TO_GPIO_IN_8 "/sys/class/gpio/gpio489/value"
-#define PATH_TO_GPIO_IN_9 "/sys/class/gpio/gpio488/value"
+#define PATH_TO_GPIO_IN_0 "/sys/class/gpio/gpio519/value"
+#define PATH_TO_GPIO_IN_1 "/sys/class/gpio/gpio518/value"
+#define PATH_TO_GPIO_IN_2 "/sys/class/gpio/gpio517/value"
+#define PATH_TO_GPIO_IN_3 "/sys/class/gpio/gpio516/value"
+#define PATH_TO_GPIO_IN_4 "/sys/class/gpio/gpio515/value"
+#define PATH_TO_GPIO_IN_5 "/sys/class/gpio/gpio514/value"
+#define PATH_TO_GPIO_IN_6 "/sys/class/gpio/gpio513/value"
+#define PATH_TO_GPIO_IN_7 "/sys/class/gpio/gpio512/value"
 
-#define PATH_TO_GPIO_OUT  "/sys/class/gpio/gpio491/value"
+#define PATH_TO_GPIO_IN_8 "/sys/class/gpio/gpio520/value"
+#define PATH_TO_GPIO_IN_9 "/sys/class/gpio/gpio521/value"
+#define PATH_TO_GPIO_IN_10 "/sys/class/gpio/gpio535/value"
+#define PATH_TO_GPIO_IN_11 "/sys/class/gpio/gpio534/value"
+#define PATH_TO_GPIO_IN_12 "/sys/class/gpio/gpio533/value"
+#define PATH_TO_GPIO_IN_13 "/sys/class/gpio/gpio532/value"
+#define PATH_TO_GPIO_IN_14 "/sys/class/gpio/gpio531/value"
+#define PATH_TO_GPIO_IN_15 "/sys/class/gpio/gpio530/value"
+
+
+#define PATH_TO_GPIO_OUT  "/sys/class/gpio/gpio536/value"
+#define SOLO_DISABLE  "/sys/class/gpio/gpio528/value"
+#define TIME_COUNTER "/sys/class/gpio/gpio529/value" 
+
+#define LED_HPS_B  "/sys/class/gpio/gpio553/value" // ign timer
 
 #else
 
-#define PATH_TO_GPIO_IN_0 "/sys/class/gpio/gpio422/value"
-#define PATH_TO_GPIO_IN_1 "/sys/class/gpio/gpio423/value"
-#define PATH_TO_GPIO_IN_2 "/sys/class/gpio/gpio424/value"
-#define PATH_TO_GPIO_IN_3 "/sys/class/gpio/gpio425/value"
-#define PATH_TO_GPIO_IN_4 "/sys/class/gpio/gpio426/value"
-#define PATH_TO_GPIO_IN_5 "/sys/class/gpio/gpio427/value"
-#define PATH_TO_GPIO_IN_6 "/sys/class/gpio/gpio428/value"
-#define PATH_TO_GPIO_IN_7 "/sys/class/gpio/gpio429/value"
-#define PATH_TO_GPIO_IN_8 "/sys/class/gpio/gpio431/value"
-#define PATH_TO_GPIO_IN_9 "/sys/class/gpio/gpio430/value"
+#define PATH_TO_GPIO_IN_0 "/sys/class/gpio/gpio519/value"
+#define PATH_TO_GPIO_IN_1 "/sys/class/gpio/gpio518/value"
+#define PATH_TO_GPIO_IN_2 "/sys/class/gpio/gpio517/value"
+#define PATH_TO_GPIO_IN_3 "/sys/class/gpio/gpio516/value"
+#define PATH_TO_GPIO_IN_4 "/sys/class/gpio/gpio515/value"
+#define PATH_TO_GPIO_IN_5 "/sys/class/gpio/gpio514/value"
+#define PATH_TO_GPIO_IN_6 "/sys/class/gpio/gpio513/value"
+#define PATH_TO_GPIO_IN_7 "/sys/class/gpio/gpio512/value"
 
-#define PATH_TO_GPIO_OUT  "/sys/class/gpio/gpio433/value"
+#define PATH_TO_GPIO_IN_8 "/sys/class/gpio/gpio520/value"
+#define PATH_TO_GPIO_IN_9 "/sys/class/gpio/gpio521/value"
+#define PATH_TO_GPIO_IN_10 "/sys/class/gpio/gpio535/value"
+#define PATH_TO_GPIO_IN_11 "/sys/class/gpio/gpio534/value"
+#define PATH_TO_GPIO_IN_12 "/sys/class/gpio/gpio533/value"
+#define PATH_TO_GPIO_IN_13 "/sys/class/gpio/gpio532/value"
+#define PATH_TO_GPIO_IN_14 "/sys/class/gpio/gpio531/value"
+#define PATH_TO_GPIO_IN_15 "/sys/class/gpio/gpio530/value"
+
+
+#define PATH_TO_GPIO_OUT  "/sys/class/gpio/gpio536/value"
+#define SOLO_DISABLE  "/sys/class/gpio/gpio529/value"
+#define TIME_COUNTER "/sys/class/gpio/gpio529/value"
+
+#define LED_HPS_B  "/sys/class/gpio/gpio553/value" // ign timer
 
 #endif
 
@@ -44,9 +68,17 @@ Gpio::Gpio()
     input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_5});
     input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_6});
     input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_7});
+    input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_8});
+    input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_9});
+    input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_10});
+    input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_11});
+    input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_12});
+    input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_13});
+    input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_14});
+    input.append({.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_15});
 
-    input_SOLO_desable ={.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_8};
-    input_time_counter ={.old_state = 1, .path_to_gpio = PATH_TO_GPIO_IN_9};
+    input_SOLO_desable ={.old_state = 1, .path_to_gpio = SOLO_DISABLE};
+    input_time_counter ={.old_state = 1, .path_to_gpio = TIME_COUNTER};
 
 
     old_common_alarm = -1;
@@ -59,6 +91,18 @@ Gpio::Gpio()
     connect(timer_gpio_update, &QTimer::timeout, this, &Gpio::slot_update_time_counter);
     connect(timer_gpio_update, &QTimer::timeout, this, &Gpio::slot_update_solo_mode_desebled);
     connect(timer_gpio_update, &QTimer::timeout, this, &Gpio::slot_update_state);
+
+    /*
+    
+    
+    */
+
+
+    timer_led_hps_b = new QTimer; // ign
+    timer_led_hps_b->start(500); // ign
+    connect(timer_led_hps_b, &QTimer::timeout, this, &Gpio::slot_led_hps_b); // ign
+
+
 }
 
 void Gpio::set_mode(int mode)
@@ -162,6 +206,34 @@ void Gpio::set_common_alarm(int common_alarm)
         set_state(PATH_TO_GPIO_OUT, "1");
 }
 
+/*
+void Gpio::slot_led_hps_a(){
+    int state = get_value(LED_HPS_A);
+    if(state == 0){
+        set_state(LED_HPS_A, "1");
+        qDebug(category) << "LED_HPS_A OFF";
+    }else{
+        set_state(LED_HPS_A, "0");
+    }
+
+}
+*/
+
+
+void Gpio::slot_led_hps_b(){
+    if(show_err){
+            int state = get_value(LED_HPS_B);
+            if(state == 0){
+                set_state(LED_HPS_B, "1");
+                //qDebug(category) << "LED_HPS_B OFF";
+            }else{
+                set_state(LED_HPS_B, "0");
+                //qDebug(category) << "LED_HPS_B ON";
+            }
+    } 
+}
+
+
 
 int Gpio::get_value(QString file_name)
 {
@@ -169,7 +241,10 @@ QString line;
 int value;
     QFile file(file_name);
     if (!file.open(QIODevice::ReadOnly)){
-        qDebug(category) << "Could not open file" << file_name;
+        if(show_err){
+            qDebug(category) << "Could not open file" << file_name;
+            show_err = false;
+        }
         return -1;
     }
 
@@ -185,7 +260,11 @@ void Gpio::set_state(QString file_name, const char *state)
 {
     QFile file(file_name);
     if(!file.open(QIODevice::ReadWrite)){
-        qDebug(category) << "Could not open file" << file_name;
+        if(show_err){
+            qDebug(category) << "Could not open file" << file_name;
+            show_err = false;
+        }
+        
     }
     file.write(state);
     file.close();
