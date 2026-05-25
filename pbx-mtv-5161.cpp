@@ -1,4 +1,4 @@
- #include "pbx-mtv-508.h"
+ #include "pbx-mtv-5161.h"
 #include "str-system/video_info.h"
 #include "board_config.h"
 

@@ -3,7 +3,7 @@
 #include <QCommandLineParser>
 #include <QDebug>
 #include <QObject>
-#include "pbx-mtv-508.h"
+#include "pbx-mtv-5161.h"
 
 QT_USE_NAMESPACE
 
@@ -15,10 +15,10 @@ void app_exit(int)
 int main(int argc, char *argv[])
 {
         QApplication a(argc, argv);
-        qDebug() << "PBX-MTV-508 application";
+        qDebug() << "PBX-MTV-5161 application";
         QCommandLineParser parser;
         QCommandLineOption watchdog_option("w", "watchdog");
-        parser.setApplicationDescription("PBX-MTV-508 applicaton");
+        parser.setApplicationDescription("PBX-MTV-5161 applicaton");
         parser.addOption(watchdog_option);
         parser.addHelpOption();
         parser.process(a);

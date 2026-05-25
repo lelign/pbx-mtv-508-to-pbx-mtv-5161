@@ -41,9 +41,9 @@ add_subdirectory(profnext)
 add_subdirectory(tsl)
 
 # --- Исполняемый файл 1: pbx-mtv-508 ---
-add_executable(pbx-mtv-508
-    pbx-mtv-508-main.cpp
-    pbx-mtv-508.cpp
+add_executable(pbx-mtv-5161
+    pbx-mtv-5161-main.cpp
+    pbx-mtv-5161.cpp
     mtv-system/mtv-system.cpp
     hdmi_adv7513/hdmi_adv7513.cpp
     i2c/i2c.cpp	
@@ -84,19 +84,19 @@ add_executable(pbx-mtv-508
 )
 
 # Индивидуальные макросы для конкретной цели
-target_compile_definitions(pbx-mtv-508 PRIVATE 
+target_compile_definitions(pbx-mtv-5161 PRIVATE 
     BOARD_REV=${BOARD_REV}
     QT_NO_EXCEPTIONS
 )
 
 # Пути к локальным заголовкам (заменяет старый include_directories)
-target_include_directories(pbx-mtv-508 PRIVATE 
+target_include_directories(pbx-mtv-5161 PRIVATE 
     tsl
     ${ZVBI_INCLUDE_DIRS}
 )
 
 # Линковка библиотек (Qt тянет свои заголовки автоматически)
-target_link_libraries(pbx-mtv-508 PRIVATE 
+target_link_libraries(pbx-mtv-5161 PRIVATE 
     Qt5::Widgets 
     Qt5::Core 
     Qt5::Network
@@ -116,10 +116,8 @@ target_link_libraries(rgbyuv-test PRIVATE Qt5::Widgets)
 add_executable(read_mem read_mem/read_mem.cpp)
 target_link_libraries(read_mem PRIVATE Qt5::Widgets Qt5::Core)
 
-# --- Исполняемый файл 4: devmem ---
-add_executable(devmem devmem/devmem2.c)
 
 # --- Правила инсталляции (Исправлено с PROGRAMS на TARGETS) ---
-install(TARGETS pbx-mtv-508 rgbyuv-test read_mem devmem DESTINATION bin)
+install(TARGETS pbx-mtv-5161 rgbyuv-test read_mem DESTINATION bin)
 
 #edited by II
