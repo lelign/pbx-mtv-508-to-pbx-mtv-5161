@@ -2,12 +2,16 @@
 #include <QtWebSockets/qwebsocketserver.h>
 #include <QtWebSockets/qwebsocket.h>
 #include <QtCore/QDebug>
-#include <QLoggingCategory>
+#include <QLoggingCategory> // ign
+#include <QSaveFile>
+#include <qfile.h>
 
-static QLoggingCategory category("websocket server");
+#include <QTimer> // ign
+
+#define LED_HPS_A  "/sys/class/gpio/gpio554/value" // ign
 
 QT_USE_NAMESPACE
-
+static QLoggingCategory category("websocket-server"); // ign
 /**
 *  Конструктор
 **/
@@ -18,18 +22,29 @@ WebSocketServer::WebSocketServer(quint16 port, bool debug, QObject *parent) :
         m_clients(),
         m_debug(debug)
 {
+        
         if (m_pWebSocketServer->listen(QHostAddress::Any, port)){
                 if (m_debug)
-                        qDebug() << "WebSocketServer listening on port" << port;
+                        qDebug(category) << "WebSocketServer listening on port" << port;
                 connect(m_pWebSocketServer, &QWebSocketServer::newConnection,
                         this, &WebSocketServer::onNewConnection);
                 connect(m_pWebSocketServer, &QWebSocketServer::closed, this, &WebSocketServer::closed);
         }
-}
 
+        qDebug(category) << "\t\tlisten on port:"<< port; // ign
+        /*flash led_hps_a long/short when message on websocketserver*/
+        timer_led_hps_a = new QTimer; // ign
+        timer_led_hps_a->start(timer_set); // ign
+        connect(timer_led_hps_a, &QTimer::timeout, this, &WebSocketServer::slot_led_hps_a); // ign
+        
+}
+void check_void(){
+    qDebug(category) << " 31 check void"; // ign
+}
 WebSocketServer::~WebSocketServer()
 {
         m_pWebSocketServer->close();
+        qDebug(category) << " 34"; // ign
         qDeleteAll(m_clients.begin(), m_clients.end());
 }
 
@@ -39,6 +54,14 @@ WebSocketServer::~WebSocketServer()
 void WebSocketServer::onNewConnection()
 {
         QWebSocket *pSocket = m_pWebSocketServer->nextPendingConnection();
+        
+
+        /*
+        QString clientIP = pSocket->peerAddress().toString();
+        quint16 clientPort = pSocket->peerPort();
+        qDebug() << "New connection from:" << clientIP << "on port:" << clientPort;
+        */
+
 
         connect(pSocket, &QWebSocket::textMessageReceived, this, &WebSocketServer::processTextMessage);
         connect(pSocket, &QWebSocket::disconnected, this, &WebSocketServer::socketDisconnected);
@@ -79,7 +102,7 @@ QJsonObject data_obj;
         json["type"] = "keepalive";
         data_obj["status"] = "alive";
         json["data"] = data_obj;
-        QJsonDocument saveDoc(json);
+        QJsonDocument saveDoc(json);        
 
         return saveDoc.toJson();
 }
@@ -101,8 +124,7 @@ QJsonParseError err;
         senddata(pClient, get_alive());
         return;
     }
-    
-    qDebug(category) << "\tCONFIGURE! => signal_web_message";
+
     emit signal_web_message(pClient, obj);
 }
 
@@ -113,8 +135,13 @@ void WebSocketServer::processTextMessage(QString message)
 {
     QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
 
-    if (m_debug)
-        qDebug() << "Message received:" << message;
+        if (message.size() > 30){
+                timer_set = 3000;            
+        }else{
+                timer_set = 500;
+        }
+        set_state(LED_HPS_A, "0");
+        timer_led_hps_a->setInterval(timer_set); 
 
     parse_message(pClient, message);
 }
@@ -126,9 +153,59 @@ void WebSocketServer::socketDisconnected()
 {
         QWebSocket *pClient = qobject_cast<QWebSocket *>(sender());
         if (m_debug)
-                qDebug() << "socketDisconnected:" << pClient;
+                qDebug(category) << "socketDisconnected:" << pClient;
         if (pClient){
                 m_clients.removeAll(pClient);
                 pClient->deleteLater();
+        }
+}
+
+
+void WebSocketServer::slot_led_hps_a(){
+        
+        if(show_err){
+        int state = get_value(LED_HPS_A);        
+                if(state == 0){
+                        set_state(LED_HPS_A, "1");                
+                }   
+        }   
+}
+
+
+
+int WebSocketServer::get_value(QString file_name)
+{
+QString line;
+int value;
+    QFile file(file_name);
+    if (!file.open(QIODevice::ReadOnly)){
+        if(show_err){
+            qDebug(category) << "Could not open file" << file_name;
+            show_err = false;
+        }
+        return -1;
+    }
+
+    line = file.readAll();
+    file.close();
+
+    value = line.toInt();
+
+    return value;
+}
+
+void WebSocketServer::set_state(QString file_name, const char *state)
+{
+    QFile file(file_name);
+    if(show_err){
+        if(!file.open(QIODevice::ReadWrite)){
+       
+            qDebug(category) << "Could not open file" << file_name;
+            show_err = false;
+        }
+    
+        //qDebug(category) << "LED_HPS_A : " << state;
+        file.write(state);
+        file.close();
         }
 }
