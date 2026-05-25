@@ -9,11 +9,13 @@
 
 #define SizeOfArray(a) (sizeof(a)/sizeof(*a))
 
-#define SETTINGS_SYS_CONFIG_FILE_NAME ("pbx-mtv-508_sys")
+#define SETTINGS_SYS_CONFIG_FILE_NAME ("pbx-mtv-5161_sys")
 #if (BOARD_REV==0)
-#define PATH_TO_MODEL_DEVICE_FILE "/sys/class/gpio/gpio445/value"
+#define PATH_TO_MODEL_DEVICE_FILE "/var/volatile/MODEL_DEVICE"
+// #define PATH_TO_MODEL_DEVICE_FILE "/sys/class/gpio/gpio445/value" // in 508
 #else
-#define PATH_TO_MODEL_DEVICE_FILE "/sys/class/gpio/gpio477/value"
+#define PATH_TO_MODEL_DEVICE_FILE "/var/volatile/MODEL_DEVICE"
+// #define PATH_TO_MODEL_DEVICE_FILE "/sys/class/gpio/gpio477/value" // in 508
 #endif
 
 
@@ -29,6 +31,11 @@ extern "C" {
 #include "../profitt-security/profitt-security.h"
 #include "../ip-utils/ip-utils.h"
 }
+
+//Mtv_web::Mtv_web(PbxMtvSystem *mtvsystem, Hardware_diagnostics *hardware_diagnostics, Layout *layout) :
+//Mtv_web::Mtv_web(PbxMtvSystem *mtvsystem, Hardware_diagnostics *hardware_diagnostics) :
+//    mtvsystem(mtvsystem), hardware_diagnostics(hardware_diagnostics), layout(layout)
+    //mtvsystem(mtvsystem), hardware_diagnostics(hardware_diagnostics) // ign
 
 Mtv_web::Mtv_web(PbxMtvSystem *mtvsystem, Hardware_diagnostics *hardware_diagnostics, Layout *layout) :
     mtvsystem(mtvsystem), hardware_diagnostics(hardware_diagnostics), layout(layout)
@@ -50,6 +57,7 @@ Mtv_web::Mtv_web(PbxMtvSystem *mtvsystem, Hardware_diagnostics *hardware_diagnos
 
     uptime_utils = new Uptime_utils;
     tsl_server   = new TslServer;
+
     web_server   = new WebSocketServer(PORT, 0);
 
     connect(web_server, SIGNAL(signal_web_new_client(QWebSocket*)), this,
@@ -61,26 +69,26 @@ Mtv_web::Mtv_web(PbxMtvSystem *mtvsystem, Hardware_diagnostics *hardware_diagnos
 
     connect(hardware_diagnostics, &Hardware_diagnostics::signal_hardware_state, this, &Mtv_web::slot_hardware_state);
     connect(hardware_diagnostics, &Hardware_diagnostics::signal_fan_state,      this, &Mtv_web::slot_fan_state);
-
+    
     connect(layout, &Layout::signal_preset, this, &Mtv_web::slot_setPreset);
     connect(layout, &Layout::signal_solo, this, &Mtv_web::slot_set_solo);
     connect(layout, &Layout::signal_cascade_device_connected,    this, &Mtv_web::slot_set_cascade_data);
     connect(layout, &Layout::signal_cascade_server_readyRead,    this, &Mtv_web::slot_cascade_server_readyRead);
     connect(layout, &Layout::signal_cascade_device_data_receive, this, &Mtv_web::slot_cascade_slave_data_receive);
-
+    
     connect(tsl_server, &TslServer::message, this, &Mtv_web::slot_tls_message);
     connect(tsl_server, &TslServer::message, this, &Mtv_web::slot_TLS_TimeCounterCtrl);
-    connect(tsl_server, &TslServer::message, this, &Mtv_web::slot_TLS_PresetLayout);
-    connect(tsl_server, &TslServer::message, this, &Mtv_web::slot_TLS_Solo);
 
     Settings_Read();
 
     remote_ctrl_preset->udate_colorLed(layout->layout_preset.index);
 
     model_device = get_model_device();
+    if (MTV_PBX_5161)
+        model_device = 4; // ign for PBX-MTV-5161
     std::srand(std::time(nullptr));
     rand_value = std::rand();
-
+    qDebug(category) << model_device << " rand_value : " << rand_value;
 }
 
  Mtv_web::~Mtv_web()
@@ -93,6 +101,9 @@ Mtv_web::Mtv_web(PbxMtvSystem *mtvsystem, Hardware_diagnostics *hardware_diagnos
 /*---------------------------------------------------------------------------*/
 int Mtv_web::get_model_device(){
     #if (BOARD_REV==0)
+    qDebug(category) << "\n\t\tBOARD_REV : " << BOARD_REV
+                     << "\n\t\tPATH_TO_MODEL_DEVICE_FILE : " << PATH_TO_MODEL_DEVICE_FILE
+                     << "\n\t\tPATH_TO_MODEL_DEVICE_FILE : " << get_value(PATH_TO_MODEL_DEVICE_FILE);
     if(get_value(PATH_TO_MODEL_DEVICE_FILE))
         return 0;
     else
@@ -177,8 +188,19 @@ void Mtv_web::check_sdi_format_from_slave(){
 void Mtv_web::clear_sdi_format_str(int cascade_index)
 {
     for(int i = 0; i < 8; i++){
-        int k = (cascade_index + 1) * 8 + i;
-        layout->layout_object[k].sdi_format_str = "";
+        int k = (cascade_index + 1) * 16 + i; // int k = (cascade_index + 1) * 8 + i; // ign for 5161
+        // layout->layout_object[k].sdi_format_str = ""; ign commented
+        if (k < cascade_index){ // ign added cause app failed
+            layout->layout_object[k].sdi_format_str = "";
+                /*
+                qDebug(category) << " clear_sdi_format_str [k] " << k 
+                << "\n\t\tlayout " << layout->layout_object[k].sdi_format_str
+                << "\n\t\tcascade_index " << cascade_index;
+                */
+                
+        }
+       
+        
     }
 }
 /*---------------------------------------------------------------------------*/
@@ -200,37 +222,34 @@ QJsonValue val;
         if(val.toString() == "set_config"){
             if(obj.value("data").isObject()){
                 data_obj = obj.value("data").toObject();
-                qDebug(category) << "\tslot web message cmd_set_config";
                 cmd_set_config(data_obj);
             }
             else{
-                qDebug() << "Configuration not JsonObject";
+                qDebug(category) << "slot_web_message() set_config Configuration not JsonObject";
             }
         }
         if(val.toString() == "set_solo"){
             if(obj.value("data").isObject()){
                 data_obj = obj.value("data").toObject();
-                qDebug(category) << "\tslot web message cmd_set_solo";
                 cmd_set_solo(data_obj);
             }
             else{
-                qDebug() << "Configuration not JsonObject";
+                qDebug(category) << "slot_web_message() Configuration not JsonObject obj.value(data).isObject() : " 
+                        << obj.value("data").isObject();
             }
         }
         if(val.toString() == "set_preset"){
             if(obj.value("data").isObject()){
                 data_obj = obj.value("data").toObject();
-                qDebug(category) << "\tslot web message cmd_set_preset";
                 cmd_set_preset(data_obj);
             }
             else{
-                qDebug() << "Configuration not JsonObject";
+                qDebug(category) << "set_preset Configuration not JsonObject";
             }
         }
         if(val.toString() == "set_time"){
             if(obj.value("data").isObject()){
                 data_obj = obj.value("data").toObject();
-                qDebug(category) << "\tslot web message cmd_set_time";
                 cmd_set_time(data_obj);
             }
             else{
@@ -240,7 +259,6 @@ QJsonValue val;
         if(val.toString() == "access"){
             if(obj.value("data").isObject()){
                 data_obj = obj.value("data").toObject();
-                qDebug(category) << "\tslot web message cmd_set_access_word";
                 cmd_set_access_word(data_obj);
             }
             else{
@@ -251,14 +269,12 @@ QJsonValue val;
             system("reboot");
         }
         if(val.toString() == "get_layout_presets"){
-            qDebug(category) << "\tslot web message cmd_get_layout_presets";
             cmd_get_layout_presets(pClient);
         }
         if(val.toString() == "set_network_settings"){
             if(obj.value("data").isObject()){
                 data_obj = obj.value("data").toObject();
-                qDebug(category) << "\tslot web message set_network_settings";
-                cmd_set_network_settings(data_obj);
+                cmd_set_nework_settings(data_obj);
             }
             else{
                 qDebug() << "Configuration not JsonObject";
@@ -267,7 +283,6 @@ QJsonValue val;
         if(val.toString() == "set_layout_presets"){
             if(obj.value("data").isObject()){
                 data_obj = obj.value("data").toObject();
-                qDebug(category) << "\tslot web message cmd_set_layout_presets";
                 cmd_set_layout_presets(data_obj);
             }
             else{
@@ -277,7 +292,7 @@ QJsonValue val;
     }
 }
 /*---------------------------------------------------------------------------*/
-void Mtv_web::cmd_set_network_settings(QJsonObject data_obj)
+void Mtv_web::cmd_set_nework_settings(QJsonObject data_obj)
 {
 QRegularExpression re("(\\d+)\\.(\\d+)\\.(\\d+)\\.(\\d+)");
 QString eth1_ip;
@@ -307,7 +322,7 @@ unsigned char   inet_gw[4] = {169, 254,   0,   1};
         for(int i = 0; i < 4; i++)
             inet_mask[i] = match_mask.captured(i + 1).toInt();
     }
-
+    qDebug(category) << "\tcmd_set_nework_settings" << eth1_ip << eth1_gw << eth1_mask << inet_ip, inet_mask, inet_gw ;
     write_config(inet_ip, inet_mask, inet_gw);
 }
 /*---------------------------------------------------------------------------*/
@@ -339,7 +354,8 @@ void Mtv_web::cmd_set_preset(QJsonObject data_obj)
 void Mtv_web::cmd_get_layout_presets( QWebSocket *pClient )
 {
     qDebug(category) << "Command get layout presets";
-
+    
+    
     QByteArray to_send_data = get_json_layout_presets();
 
     web_server->senddata( pClient, to_send_data );
@@ -378,9 +394,13 @@ void Mtv_web::cmd_set_solo(QJsonObject data_obj)
 /*---------------------------------------------------------------------------*/
 void Mtv_web::set_sys_conf()
 {
+    qDebug() << "set_sys_conf";
     update_timezone(time_zone.toStdString().c_str());
+    qDebug() << "update_timezone";
     update_resolvconf(dns_name.toStdString().c_str());
+    qDebug() << "update_resolveconf";
     ntpdate_server(ntp_server.toStdString().c_str());
+    qDebug() << "ntpdate_server";
 }
 /*---------------------------------------------------------------------------*/
 void Mtv_web::cmd_set_config(QJsonObject data_obj)
@@ -466,7 +486,7 @@ QJsonObject clock_object;
         layout->cascade.last_slave_device = 0;
     }
 
-    apply_new_config();
+    apply_new_conig();
 }
 /*---------------------------------------------------------------------------*/
 void Mtv_web::parser_sdi_input_label(QJsonArray jsonArray)
@@ -477,9 +497,10 @@ void Mtv_web::parser_sdi_input_label(QJsonArray jsonArray)
             break;
         layout->layout_object[i].sdi_label = jsonArray[i].toString();
     }
+    qDebug(category) << "486 int layout_object_size : " << layout_object_size;
 }
 /*---------------------------------------------------------------------------*/
-void Mtv_web::apply_new_config()
+void Mtv_web::apply_new_conig()
 {
     layout->Settings_Write();
     layout->preset_Layout_Write(layout->layout_preset.index);
@@ -488,6 +509,7 @@ void Mtv_web::apply_new_config()
     emit signal_reconfigure();
 
     QByteArray to_send_data = get_json_settings();
+    qDebug(category) << "apply_new_config : " << to_send_data.size();
     web_server->sendall(to_send_data);
 }
 /*---------------------------------------------------------------------------*/
@@ -595,14 +617,6 @@ QList<QJsonObject> video_obj;
         layout->layout_object[i].cell.sdi_format_display = sdi_format_display_array[i].toInt();
     }
 
-    QJsonValue teletext_icon_display_val = layout_object.value("teletext_icon_display");
-    QJsonArray teletext_icon_display_array = teletext_icon_display_val.toArray();
-    for(int i = 0; i < teletext_icon_display_array.size(); i++){
-        if(i >= layout_object_size)
-            break;
-        layout->layout_object[i].cell.teletext_icon_display = teletext_icon_display_array[i].toInt();
-    }
-
     QJsonValue umd_display_val = layout_object.value("umd_display");
     QJsonArray umd_display_array = umd_display_val.toArray();
     for(int i = 0; i < umd_display_array.size(); i++){
@@ -660,12 +674,10 @@ int cascade_num = 0;
     }
 }
 /*---------------------------------------------------------------------------*/
-void Mtv_web::slot_TLS_TimeCounterCtrl(int addr, int tally_addr, QString txt)
+void Mtv_web::slot_TLS_TimeCounterCtrl(int addr, int tally, QString txt)
 {
 Q_UNUSED(txt);
     if(addr != 50) return;
-
-    int tally = tally_addr & 0x03; 
 
     if(tally)
         layout->timer_time_counter->slot_stop();
@@ -673,64 +685,12 @@ Q_UNUSED(txt);
         layout->timer_time_counter->slot_start();
 }
 /*---------------------------------------------------------------------------*/
-void Mtv_web::slot_TLS_PresetLayout(int addr, int tally_addr, QString txt)
-{
-#define PRESET_START_ADDR 51    
-#define PRESET_STOP_ADDR (PRESET_START_ADDR + 9) 
-
-    Q_UNUSED(txt);
-    if ((addr < PRESET_START_ADDR) || ( PRESET_STOP_ADDR < addr )) return;
-
-    if (tally_addr & 0x03)
-        slot_setPreset(addr - PRESET_START_ADDR);
-}
-/*---------------------------------------------------------------------------*/
-void Mtv_web::slot_TLS_Solo(int addr, int tally_addr, QString txt)
-{
-    Q_UNUSED(txt);
-    constexpr int SOLO_START_ADDR = 61;
-    constexpr int SOLO_STOP_ADDR = SOLO_START_ADDR + 35;
-
-    if (addr < SOLO_START_ADDR || addr > SOLO_STOP_ADDR)
-        return;
-
-    const int soloInput = addr - SOLO_START_ADDR;
-
-    Layout::solo_mode_t solo_mode{
-        .enable = tally_addr != 0,
-        .input = soloInput};
-
-    if (!trim_input_number(solo_mode.input))
-        return;
-
-    if (layout->solo_mode.enable != solo_mode.enable ||
-        (solo_mode.enable && layout->solo_mode.input != solo_mode.input))
-    {
-        slot_set_solo(solo_mode);
-    }
-}
-/*---------------------------------------------------------------------------*/
-bool Mtv_web::trim_input_number(int &input)
-{
-    int inputLimit = 7 * (layout->cascade.mode + 1);
-
-    if (input > inputLimit)
-    {
-        return false;
-    }
-
-    input += (input / 7) - (input == inputLimit ? 1 : 0);
-    return true;
-}
-/*---------------------------------------------------------------------------*/
-void Mtv_web::slot_tls_message(int addr, int tally_addr, QString txt)
+void Mtv_web::slot_tls_message(int addr, int tally, QString txt)
 {
 QJsonObject json;
 QJsonObject data_obj;
 
     if(addr >= (int)SizeOfArray(layout->layout_object)) return;
-
-    int tally = tally_addr & 0x03; 
 
     data_obj["addr" ] = addr;
     data_obj["tally"] = tally;
@@ -784,13 +744,9 @@ QJsonArray  jsonArray;
 
         get_int_value(cascade_settings_obj, "gpio_mode", layout->gpio_mode);
 
-        get_str_value(cascade_settings_obj,"ntp",       ntp_server);
-        get_str_value(cascade_settings_obj,"time_zone", time_zone);
-        get_str_value(cascade_settings_obj,"dns",       dns_name);
-
         layout->clock_cell.enable = 0; // часы рисует только мастер
 
-        apply_new_config();
+        apply_new_conig();
 
         return;
     }
@@ -819,10 +775,10 @@ QJsonArray Mtv_web::get_json_module_sdi_format()
 {
 QJsonArray sdi_input_arr;
 
-    for(uint i = 0; i < 8 ; ++i){
+    for(uint i = 0; i < 16 ; ++i){ //ign for(uint i = 0; i < 8 ; ++i){
         sdi_input_arr.append(mtvsystem->get_sdi_format_str(i));
     }
-
+    
     return sdi_input_arr;
 }
 /*---------------------------------------------------------------------------*/
@@ -856,9 +812,6 @@ QJsonObject data_obj;
     data_obj["sdi_out_format"   ] = layout->output_format;
     data_obj["last_slave_device"] = layout->get_last_slave_device(index);
     data_obj["gpio_mode"        ] = layout->gpio_mode;
-    data_obj["dns"              ] = dns_name;
-    data_obj["ntp"              ] = ntp_server;
-    data_obj["time_zone"        ] = time_zone;
 
     json["cascade_settings"] = data_obj;
 
@@ -874,7 +827,7 @@ QByteArray to_send_data;
 
     get_network_setting();
 
-    to_send_data = get_json_settings();
+    to_send_data = get_json_settings();    
     web_server->senddata( pClient, to_send_data );
 
     to_send_data = get_json_block_configuration();
@@ -938,7 +891,7 @@ QJsonArray sdi_input_arr;
     for(uint i = 0; i < SizeOfArray(layout->layout_object) ; ++i){
         sdi_input_arr.append(layout->layout_object[i].sdi_format_str);
     }
-
+    
     return sdi_input_arr;
 }
 /*---------------------------------------------------------------------------*/
@@ -1014,7 +967,6 @@ QJsonObject layout_object;
     layout_object["aspect_ratio_sd"   ] = get_json_aspect_ratio_sd();
     layout_object["cell_style"        ] = get_json_cell_style();
     layout_object["sdi_format_display"] = get_json_sdi_format_display();
-    layout_object["teletext_icon_display"] =  get_json_teletext_icon_display();
     layout_object["umd_display"       ] = get_json_umd_display();
 
     return layout_object;
@@ -1028,15 +980,9 @@ QJsonObject data_obj;
     json    ["type"   ] = "configuration";
 
     data_obj["system"      ] = get_json_system();
-    
     data_obj["sdi_format"  ] = get_json_sdi_format();
     data_obj["diagnostics" ] = get_json_hardware_diagnostics();
     data_obj["rand_value"  ] = rand_value;
-
-    QJsonDocument doc(data_obj);
-    QString jsonString = doc.toJson();
-    writeToFile("/mnt/ramdisk/get_json_block_configuration", jsonString);
-    //qDebug(category) << "\n\t\tget_json_block_configuration()" << jsonString<< "\n";
 
     json["data"] = data_obj;
     QJsonDocument saveDoc(json);
@@ -1077,17 +1023,6 @@ QJsonArray item_list;
     return item_list;
 }
 /*---------------------------------------------------------------------------*/
-QJsonArray Mtv_web::get_json_teletext_icon_display()
-{
- QJsonArray item_list;
-
-    for(uint i = 0; i < SizeOfArray(layout->layout_object); ++i){
-        item_list.append(layout->layout_object[i].cell.teletext_icon_display);
-    }
-
-    return item_list;   
-}
-/*---------------------------------------------------------------------------*/
 QJsonArray Mtv_web::get_json_sdi_format_display()
 {
 QJsonArray item_list;
@@ -1095,7 +1030,7 @@ QJsonArray item_list;
     for(uint i = 0; i < SizeOfArray(layout->layout_object); ++i){
         item_list.append(layout->layout_object[i].cell.sdi_format_display);
     }
-
+    
     return item_list;
 }
 /*---------------------------------------------------------------------------*/
@@ -1250,24 +1185,25 @@ QJsonObject sys_obj;
 void Mtv_web::Settings_Read(){
 
     QSettings settings(QSettings::SystemScope, SETTINGS_SYS_CONFIG_FILE_NAME);
-
     settings.beginGroup("time");
         ntp_server = settings.value("npt_server", "pool.ntp.org" ).toString();
         time_zone   = settings.value("timezone",  "Europe/Moscow").toString();
     settings.endGroup();
-
     settings.beginGroup("DNS");
         dns_name = settings.value("dns_name", "8.8.4.4").toString();
     settings.endGroup();
-
     set_sys_conf();
-
+    qDebug(category) << "\n\t\tntp_server : " << ntp_server
+                    << "\n\t\tdns_name : " << dns_name
+                    << "\n\t\ttime_zone : " << time_zone;
 } // End "Settings_Read"
+
+void Mtv_web::Check(){
+    qDebug() << "void check";
+}
 /*---------------------------------------------------------------------------*/
 void Mtv_web::Settings_Write(){
-
     QSettings settings(QSettings::SystemScope, SETTINGS_SYS_CONFIG_FILE_NAME);
-
     settings.beginGroup("time");
         settings.setValue("npt_server", ntp_server);
         settings.setValue("timezone",   time_zone);
@@ -1276,7 +1212,7 @@ void Mtv_web::Settings_Write(){
     settings.beginGroup("DNS");
         settings.setValue("dns_name", dns_name);
     settings.endGroup();
-
+    qDebug(category) << " 1191 Settings_Write()";
 } // End "Settings_Write"
 /*---------------------------------------------------------------------------*/
 void Mtv_web::get_network_setting()
@@ -1300,10 +1236,22 @@ static const char *eth0="eth0";
     {
         if(!(netInterface.flags() & QNetworkInterface::IsLoopBack))
         {
-            if(netInterface.name() == "eth0")   network_0.mac = netInterface.hardwareAddress();
+            if(netInterface.name() == "eth0")   {                
+                network_0.mac = netInterface.hardwareAddress();
+                // ign added get ip
+                if (netInterface.hardwareAddress().toUpper() == network_0.mac.toUpper()) {
+                    QList<QHostAddress> entries = netInterface.allAddresses();
+                    for (const QHostAddress &entry : entries) {
+                        if(!entry.isLoopback() && entry.protocol() == QAbstractSocket::IPv4Protocol){
+                            qDebug(category) << "\tconnected IP:" << entry.toString() << "MAC" << network_0.mac;
+                        }
+                    }
+                }    
+            }
         }
-     }
+    }
 }
+
 /*---------------------------------------------------------------------------*/
 QByteArray Mtv_web::get_json_layout_presets()
 {
@@ -1407,21 +1355,3 @@ void Mtv_web::parser_preset_name(QJsonArray preset_name_arr)
     }
 }
 /*---------------------------------------------------------------------------*/
-void  Mtv_web::writeToFile(const QString &fileName, const QString &content) {
-    // 1. Initialize the file object
-    QFile file(fileName);
-
-    // 2. Open the file in WriteOnly mode (and Text mode for line-ending handling)
-    if (file.open(QIODevice::WriteOnly | QIODevice::Text)) {
-        // 3. Create a stream to the file
-        QTextStream stream(&file);
-
-        // 4. Write the string to the stream
-        stream << content;
-
-        // 5. Close the file (or let it close automatically via destructor)
-        file.close();
-    } else {
-        qDebug() << "Could not open file for writing:" << file.errorString();
-    }
-}

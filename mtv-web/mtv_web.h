@@ -18,14 +18,13 @@
 #include "../tsl/tsl-server.h"
 #include "../remote_ctrl_preset/remote_ctrl_preset.h"
 #include "../version.h"
-#include <QList>
-
 
 class Mtv_web : public QObject
 {
     Q_OBJECT
 public:
     explicit Mtv_web(PbxMtvSystem *mtvsystem, Hardware_diagnostics *hardware_diagnostics, Layout *layout);
+    /*explicit Mtv_web(PbxMtvSystem *mtvsystem, Hardware_diagnostics *hardware_diagnostics);*/
     ~Mtv_web();
 
 
@@ -47,13 +46,12 @@ public slots:
     void slot_cascade_server_readyRead(QByteArray arr);
     void slot_cascade_update_sdi_format();
     void slot_cascade_slave_data_receive(int cascade_index, QByteArray data);
-    void slot_tls_message(int addr, int tally_addr, QString txt);
-    void slot_TLS_TimeCounterCtrl(int addr, int tally_addr, QString txt);
-    void slot_TLS_PresetLayout(int addr, int tally_addr, QString txt);
-    void slot_TLS_Solo(int addr, int tally_addr, QString txt);
+    void slot_tls_message(int addr, int tls, QString txt);
+    void slot_TLS_TimeCounterCtrl(int addr, int tally, QString txt);
     void slot_setPreset(int presetIndex);
 
 private:
+    bool MTV_PBX_5161 = true;
     PbxMtvSystem         *mtvsystem;
     Hardware_diagnostics *hardware_diagnostics;
     Layout               *layout;
@@ -105,12 +103,9 @@ private:
     QJsonArray  get_json_sdi_label();
     QByteArray  get_json_settings();
     QJsonArray  get_json_sdi_format();
-    QJsonArray  get_json_teletext_icon_display();
     QJsonArray  get_json_layout_preset_name();
     QString     read_preset_file(int file_num);
     QString     get_preset_file_name(int file_num);
-
-    bool trim_input_number(int &input);
     void write_preset_file(int file_num, QString text);
 
     void get_network_setting();
@@ -121,9 +116,10 @@ private:
     void cmd_get_layout_presets(QWebSocket *pClient);
     void cmd_set_time(QJsonObject data_obj);
     void cmd_set_access_word(QJsonObject data_obj);
-    void cmd_set_network_settings(QJsonObject data_obj);
+    void cmd_set_nework_settings(QJsonObject data_obj);
     void cmd_set_layout_presets(QJsonObject data_obj);
     void Settings_Read();
+    void Check();
     void Settings_Write();
     void set_sys_conf();
     int  get_model_device();
@@ -135,12 +131,10 @@ private:
     void parser_preset_name(QJsonArray preset_name_arr);
     void parser_preset_files(QJsonArray preset_files_arr);
     void debugPrintJson(QString str, QByteArray data);
-    void apply_new_config();
+    void apply_new_conig();
     void check_sdi_format_from_slave();
     void clear_sdi_format_str(int cascade_index);
     void update_preset();
-    void writeToFile(const QString &fileName, const QString &content);
-    
 };
 
 #endif // MTV_WEB_H
