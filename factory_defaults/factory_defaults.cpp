@@ -1,7 +1,9 @@
 #include <QLoggingCategory>
 #include "factory_defaults.h"
 
-#define PATH_TO_RESET_BUTTON_FILE "/sys/class/gpio/gpio444/value"
+/*#define PATH_TO_RESET_BUTTON_FILE "/sys/class/gpio/gpio444/value"*/
+//#define PATH_TO_RESET_BUTTON_FILE "/sys/class/gpio/gpio558/value" // ign 5161
+#define PATH_TO_RESET_BUTTON_FILE "/var/volatile/RESET_BUTTON" // ign 5161
 
 static QLoggingCategory category("Factory Defaults Class");
 

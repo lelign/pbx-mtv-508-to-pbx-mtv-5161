@@ -45,19 +45,16 @@ public:
         void set_dei(int enable);
         void system_set_time(time_t time);
         AncReader * anc_reader;
-        //IgnVgpiServer * ignvgpiserver;
 
         PbxMtvSystem();
         ~PbxMtvSystem();
 private:
+        bool show_debug = true; // ign added to monitor debug()
         QTimer sdi_format_timer;
         QTimer sdi_format_notify_timer;
         int sdi_format[8];
         char * buffer;
         int dei;
-        bool some_changed = true;
-        uint32_t reg_mem;
-        QList <uint32_t>  list_read_sdi_format;
         QTimer reconfigure_timer;
         void reg_write(uint32_t block, uint32_t addr, uint32_t data);
         uint32_t reg_read(uint32_t block, uint32_t addr);

@@ -13,6 +13,10 @@ public:
 void set_all_led_off();
 void set_all_led_on();
 void set_led_state(int num, int state);
+private:
+    int read_value(QString file_name);
+    int intArg;
+    void write_value(QString rewrite_line, int intArg);
 
 signals:
 

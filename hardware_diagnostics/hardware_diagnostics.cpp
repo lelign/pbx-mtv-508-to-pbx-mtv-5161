@@ -1,11 +1,21 @@
 #include <QLoggingCategory>
 #include "hardware_diagnostics.h"
 
-#define PATH_TO_FAN_STATE       ("/sys/class/gpio/gpio501/value")
-#define PATH_TO_FAN_STATE_RESET ("/sys/class/gpio/gpio502/value")
+#define PATH_TO_FAN_STATE_A       ("/sys/class/gpio/gpio544/value") // ign
+#define PATH_TO_FAN_STATE_B       ("/sys/class/gpio/gpio545/value") // ign
+#define PATH_TO_FAN_STATE_RESET ("/sys/class/gpio/gpio546/value") // ign
 
-#define PATH_TO_FILE_POWER_CONSUMPTION ("/sys/class/hwmon/hwmon0/power1_input")
-#define PATH_TO_FILE_NAME_TEMP         ("/sys/class/hwmon/hwmon1/temp1_input")
+#define PATH_TO_FILE_POWER_CONSUMPTION ("/sys/class/hwmon/hwmon2/power1_input") // ign 14247120 (5161) = 142.97 ! =>  + 15000 / 20000000
+#define PATH_TO_FILE_NAME_TEMP         ("/sys/class/hwmon/hwmon0/temp1_input") // ign
+
+
+/*
+ PATH_TO_FAN_STATE_RESET = "/sys/class/gpio/gpio546/value" (out)
+            PATH_TO_FAN_STATE
+                PATH_TO_FAN_STATE_A =  "/sys/class/gpio/gpio544/value" (in)
+                PATH_TO_FAN_STATE_B =  "/sys/class/gpio/gpio545/value" 
+
+*/           
 
 static QLoggingCategory category("Hardware_diagnostics Class");
 
@@ -69,18 +79,24 @@ int Hardware_diagnostics::get_power_W()
 
 void Hardware_diagnostics::fan_state()
 {
-static int fanIsOk = -1;
-int fan_tmp;
+static int fan_1_IsOk = -1;
+static int fan_2_IsOk = -1;
+int fan_1_tmp;
+int fan_2_tmp;
     #if (BOARD_REV==1)
         return;
     #endif
-    fan_tmp = get_value(PATH_TO_FAN_STATE);
-
+    fan_1_tmp = get_value(PATH_TO_FAN_STATE_A);
+    fan_2_tmp = get_value(PATH_TO_FAN_STATE_B);
     reset_fan_state();
 
-    if(fanIsOk != fan_tmp){
-        fanIsOk = fan_tmp;
-        emit signal_fan_state(fanIsOk);
+    if(fan_1_IsOk != fan_1_tmp){
+        fan_1_IsOk = fan_1_tmp;
+        emit signal_fan_state(fan_1_IsOk);
+    }
+    if(fan_2_IsOk != fan_2_tmp){
+        fan_2_IsOk = fan_2_tmp;
+        emit signal_fan_state(fan_2_IsOk);
     }
 }
 
