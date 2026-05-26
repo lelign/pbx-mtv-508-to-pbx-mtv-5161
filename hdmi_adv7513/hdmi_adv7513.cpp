@@ -76,7 +76,6 @@ QList<reg_value_t> hdmi_map;
             adv7513_i2c->write(ADV7513_I2C_ADDR, hdmi_color_rgb[i].addr, hdmi_color_rgb[i].value);
         }
     }
-    //qDebug(category) << "adv_7513_set_config";
 }
 
 void Hdmi_adv7513::adv_7513_set_color(int rgb)

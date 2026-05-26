@@ -48,7 +48,7 @@ public slots:
 
 private:
     PbxMtvSystem    *mtvsystem;
-    Hdmi_adv7513    *hdmi_adv7513;
+    //Hdmi_adv7513    *hdmi_adv7513; // ign
     Layout          *layout;
     Mtv_web         *mtv_web;
     Hardware_diagnostics *hardware_diagnostics;
@@ -57,7 +57,7 @@ private:
     Watchdog        *watchdog;
     Gpio            *gpio;
     File_handle_leaks *file_handle_leaks;
-    Scte_104        *scte_104[8];
+    Scte_104        *scte_104[16]; // Scte_104        *scte_104[8]; // ign
     Mtv_snmp        *mtv_snmp;
     TeletextDecoder *teletext_decoder;
     ProfnextFrontPanel *panel;

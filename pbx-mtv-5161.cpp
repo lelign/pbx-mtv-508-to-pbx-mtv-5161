@@ -1,4 +1,4 @@
- #include "pbx-mtv-5161.h"
+#include "pbx-mtv-5161.h"
 #include "str-system/video_info.h"
 #include "board_config.h"
 
@@ -8,15 +8,18 @@ extern "C" {
 #include "profitt-security/profitt-security.h"
 }
 
-/*
+
 void data_ready(uint8_t * data, int len, void * ctx)
 {
+    /*
     PbxMtv508 * ptr = (PbxMtv508*) ctx;
     for(int i=0; i<8; i++)
         ptr->hlsserver->add_packet((char*) data+(188+4)*i+4, 188);
     free(data);
+    */
+   // ign
 }
-*/
+
 
 PbxMtv508::PbxMtv508(bool watchdog)
 {
@@ -24,7 +27,7 @@ PbxMtv508::PbxMtv508(bool watchdog)
 
     this->watchdog = new Watchdog(watchdog);
 
-    hdmi_adv7513 = new Hdmi_adv7513();
+    //hdmi_adv7513 = new Hdmi_adv7513(); // ign
 
     mtvsystem = new PbxMtvSystem;
     
@@ -85,7 +88,7 @@ PbxMtv508::PbxMtv508(bool watchdog)
     connect(mtvsystem->anc_reader, &AncReader::op47_data, layout, &Layout::slot_op47_data);
     connect(mtvsystem->anc_reader, &AncReader::op42_data, layout, &Layout::slot_op47_data);
 
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){ // for(int i = 0; i < 8; ++i) // ign
         scte_104[i] = new Scte_104(i);
         connect(scte_104[i], &Scte_104::signal_update_scte_104, layout, &Layout::slot_splice);
         connect(scte_104[i], &Scte_104::signal_scte_104_in,  this, &PbxMtv508::slot_scte_104_in);
@@ -147,7 +150,7 @@ void PbxMtv508::indexed_string_event(uint8_t idx, uint16_t val)
 PbxMtv508::~PbxMtv508()
 {
     delete watchdog;
-    delete hdmi_adv7513;
+//    delete hdmi_adv7513;
 //    delete m26_control;
 //    delete hlsserver;
     delete layout;
@@ -182,9 +185,11 @@ void PbxMtv508::slot_reset_to_factory_settings()
 /*---------------------------------------------------------------------------*/
 void PbxMtv508::device_config()
 {
-    
+    /*
     hdmi_adv7513->adv_7513_set_color(layout->hdmi_color);
     hdmi_adv7513->adv_7513_set_hdmi_format(Hdmi_adv7513::HDMI_HD);
+    */ // ign
+    
 }
 void PbxMtv508::slot_web_reconfigure()
 {
