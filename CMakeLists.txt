@@ -113,11 +113,13 @@ add_executable(rgbyuv-test rgbyuv-test/rgbyuv-test.cpp)
 target_link_libraries(rgbyuv-test PRIVATE Qt5::Widgets)
 
 # --- Исполняемый файл 3: read_mem ---
-add_executable(read_mem read_mem/read_mem.cpp)
-target_link_libraries(read_mem PRIVATE Qt5::Widgets Qt5::Core)
+# add_executable(read_mem read_mem/read_mem.cpp)
+# target_link_libraries(read_mem PRIVATE Qt5::Widgets Qt5::Core)
 
 
 # --- Правила инсталляции (Исправлено с PROGRAMS на TARGETS) ---
-install(TARGETS pbx-mtv-5161 rgbyuv-test read_mem DESTINATION bin)
+# install(TARGETS pbx-mtv-5161 rgbyuv-test read_mem DESTINATION bin)
+install(TARGETS pbx-mtv-5161 rgbyuv-test DESTINATION bin)
+
 
 #edited by II
