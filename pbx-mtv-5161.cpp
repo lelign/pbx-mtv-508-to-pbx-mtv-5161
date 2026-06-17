@@ -2,7 +2,7 @@
 #include "str-system/video_info.h"
 #include "board_config.h"
 
-static QLoggingCategory category("PbxMtv508");
+static QLoggingCategory category("\033[33m SDK PBX-MTV-5161\033[0m");
 
 extern "C" {
 #include "profitt-security/profitt-security.h"
@@ -23,7 +23,7 @@ void data_ready(uint8_t * data, int len, void * ctx)
 
 PbxMtv508::PbxMtv508(bool watchdog)
 {
-    qDebug(category) << "\t\t\tProgram start";
+    qDebug(category) << "\t\t\tSDK version Program start";
 
     this->watchdog = new Watchdog(watchdog);
 

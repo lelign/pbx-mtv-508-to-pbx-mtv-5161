@@ -615,8 +615,13 @@ qDebug(category) << "====== Start Measuring ==========";
         layout_border = get_layout();
 
 qDebug(category) << "The get_layout_3x3 operation took" << timer.elapsed() << "milliseconds";
+
+    
+   
     mtvsystem->draw_overlay(&layout_border);
+
     mtvsystem->overlay_sync();
+
 qDebug(category) << "The draw_overlay operation took" << timer.elapsed() << "milliseconds";
 
     scte_104_update();
@@ -1677,7 +1682,8 @@ QSvgRenderer m_second_hand(QString(":/image/clock/second_hand.svg"));
     painter.end();
 
     mtvsystem->draw_overlay(&image_clock, clock_rec.x(),  clock_rec.y());
-    mtvsystem->overlay_sync();
+    int source = 1;
+    mtvsystem->overlay_sync(source);
 }
 
 

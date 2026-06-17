@@ -7,6 +7,7 @@
 #include <QTimer>
 #include <sys/time.h>
 #include "anc-reader.h"
+#include <QElapsedTimer>
 
 typedef struct {
         int id;
@@ -32,6 +33,7 @@ public:
         void draw_overlay(QImage * image);
         void draw_overlay(QImage * image, int offset_x, int offset_y);
         void overlay_sync();
+        void overlay_sync(int source);
         void configure_image(int index, int width, int height, int x, int y, int enable);
         void bars_configure(int index, int x, int x2, int y, int scale, int enable_1, int enable_2);
         int get_sdi_format(int index);
@@ -49,7 +51,6 @@ public:
         PbxMtvSystem();
         ~PbxMtvSystem();
 private:
-        bool show_debug = true; // ign added to monitor debug()
         QTimer sdi_format_timer;
         QTimer sdi_format_notify_timer;
         int sdi_format[8];
@@ -79,6 +80,11 @@ private:
         void mosaic_start(int enable, int inrelaced);
         void bars_mute();
         int level_value_to_db(int value);
+        void init_overlay_memory();
+        QTimer *fps_timer;
+        int overlay_fd; // Храним дескриптор открытым для максимальной скорости
+private slots:
+        void slot_fps_hardware_trigger();
 private Q_SLOTS:
         void sdi_format_timeout();
         void sdi_format_notify_timeout();

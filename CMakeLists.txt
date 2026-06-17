@@ -15,6 +15,12 @@ set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 # Настройка путей для модулей CMake
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules")
 
+# 1. Получаем текущую дату и время в формате MM-DD_HH:MM
+string(TIMESTAMP CURRENT_BUILD_TIME "%m-%d_%H:%M")
+
+# 2. Передаем эту строку в C++ код как макрос APP_VERSION
+add_definitions(-DAPP_VERSION="${CURRENT_BUILD_TIME}")
+
 # Настройка флагов компилятора для разных режимов
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     # Для Debug используем -O0 или -Og, чтобы работала отладка
@@ -123,3 +129,19 @@ install(TARGETS pbx-mtv-5161 rgbyuv-test DESTINATION bin)
 
 
 #edited by II
+
+# Ограничиваем область видимости: этот таргет работает только на Linux
+add_custom_target(create_versioned_tarball
+    # 1. Создаем файл счетчика, если его нет
+    COMMAND /bin/bash -c "[ ! -f .build_version ] && echo 1 > .build_version || true"
+    
+    # 2. Читаем версию, выводим лог и пакуем tar.gz
+    COMMAND /bin/bash -c "VERSION=\$(cat .build_version) && echo \"Archiving build v\${VERSION}...\" && tar -cvzf \"/home/iru/poky-socfpga/poky/layers/meta-customer/recipes-customer/application_26_05/files/pbx-mtv-5161-26.0\${VERSION}.tar.gz\" -C \"${CMAKE_CURRENT_SOURCE_DIR}\" ."
+             
+    # 3. Инкрементируем версию для следующего раза
+    COMMAND /bin/bash -c "VERSION=\$(cat .build_version) && echo \$((\${VERSION} + 1)) > .build_version"
+    
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    COMMENT "Forming incremental tar.gz archive..."
+    VERBATIM
+)

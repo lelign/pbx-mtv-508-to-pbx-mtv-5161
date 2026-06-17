@@ -16,9 +16,11 @@ int main(int argc, char *argv[])
 {
         QApplication a(argc, argv);
         qDebug() << "PBX-MTV-5161 application";
+        QCoreApplication::setApplicationVersion(APP_VERSION);
         QCommandLineParser parser;
         QCommandLineOption watchdog_option("w", "watchdog");
         parser.setApplicationDescription("PBX-MTV-5161 applicaton");
+        parser.addVersionOption(); 
         parser.addOption(watchdog_option);
         parser.addHelpOption();
         parser.process(a);

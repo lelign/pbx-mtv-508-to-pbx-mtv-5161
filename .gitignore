@@ -1,3 +1,12 @@
 /build
 /sources_5161_from_yocto_walnascar/*
 pbx-mtv-5161-26.05.tar.xz
+/read_mem
+/read_mem/one_addr.cpp
+read_mem/read_mem.cpp
+read_mem/read_mem.cpp
+read_mem/scaler_coeff.h
+/mtv_dump_via_flag
+socfpga_arria10_socdk.dtsi
+mtv-overlay.c
+info.txt
