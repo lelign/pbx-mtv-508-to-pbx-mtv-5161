@@ -7,6 +7,8 @@
 #include <QLoggingCategory>
 #include "mtv-system/mtv-system.h"
 #include "hdmi_adv7513/hdmi_adv7513.h"
+#include "hdmi_out/hdmi_gs12170.h"
+#include "hdmi_out/sn75dp159.h"
 #include "layout/layout.h"
 #include "mtv-web/mtv_web.h"
 #include "hardware_diagnostics/hardware_diagnostics.h"
@@ -49,6 +51,8 @@ public slots:
 private:
     PbxMtvSystem    *mtvsystem;
     //Hdmi_adv7513    *hdmi_adv7513; // ign
+    Hdmi_gs12170 *hdmi_gs12170[2];
+    Sn75dp159 *hdmi_sn75dp159[2];
     Layout          *layout;
     Mtv_web         *mtv_web;
     Hardware_diagnostics *hardware_diagnostics;

@@ -28,6 +28,12 @@ PbxMtv508::PbxMtv508(bool watchdog)
     this->watchdog = new Watchdog(watchdog);
 
     //hdmi_adv7513 = new Hdmi_adv7513(); // ign
+    hdmi_gs12170[0] = new Hdmi_gs12170(spi_0_filename);
+    hdmi_gs12170[1] = new Hdmi_gs12170(spi_1_filename);
+    hdmi_sn75dp159[0] = new Sn75dp159(SN175DP_ADDR_0);
+    hdmi_sn75dp159[1] = new Sn75dp159(SN175DP_ADDR_1);
+    connect(hdmi_gs12170[0], &Hdmi_gs12170::gs12170_lock_rate_changed, hdmi_sn75dp159[0], &Sn75dp159::slot_sn75dp159_update);
+    connect(hdmi_gs12170[1], &Hdmi_gs12170::gs12170_lock_rate_changed, hdmi_sn75dp159[1], &Sn75dp159::slot_sn75dp159_update);
 
     mtvsystem = new PbxMtvSystem;
     
@@ -153,6 +159,10 @@ PbxMtv508::~PbxMtv508()
 //    delete hdmi_adv7513;
 //    delete m26_control;
 //    delete hlsserver;
+    delete hdmi_gs12170[0];
+    delete hdmi_gs12170[1];
+    delete hdmi_sn75dp159[0];
+    delete hdmi_sn75dp159[1];
     delete layout;
     delete mtvsystem;
     delete mtv_web;

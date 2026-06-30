@@ -7,7 +7,7 @@
 
 . /opt/poky/5.2.4/environment-setup-cortexa9t2hf-neon-poky-linux-gnueabi
 
-rm -rf *; cmake ..; make -j $(nproc)
+cd build; rm -rf *; cmake ..; make -j $(nproc)
 
 cp pbx-mtv-5161 \
 #/home/iru/poky-socfpga/poky/layers/meta-customer/recipes-customer/read-mem-tools/files

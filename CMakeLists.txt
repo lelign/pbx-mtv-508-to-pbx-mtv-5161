@@ -52,7 +52,10 @@ add_executable(pbx-mtv-5161
     pbx-mtv-5161.cpp
     mtv-system/mtv-system.cpp
     hdmi_adv7513/hdmi_adv7513.cpp
-    i2c/i2c.cpp	
+    hdmi_out/hdmi_gs12170.cpp
+    hdmi_out/sn75dp159.cpp
+    i2c/i2c.cpp
+    spi/spi.cpp
     web_socket_server/websocketserver.cpp
     mtv-web/mtv_web.cpp
     hardware_diagnostics/hardware_diagnostics.cpp
