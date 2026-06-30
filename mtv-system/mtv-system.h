@@ -8,6 +8,7 @@
 #include <sys/time.h>
 #include "anc-reader.h"
 #include <QElapsedTimer>
+#include <nlohmann/json.hpp> // jq
 
 typedef struct {
         int id;
@@ -83,6 +84,8 @@ private:
         void init_overlay_memory();
         QTimer *fps_timer;
         int overlay_fd; // Храним дескриптор открытым для максимальной скорости
+        std::string log_path; // for jq
+        nlohmann::json log_obj; // for jq
 private slots:
         void slot_fps_hardware_trigger();
 private Q_SLOTS:

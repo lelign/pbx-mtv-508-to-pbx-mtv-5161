@@ -8,6 +8,7 @@
 . /opt/poky/5.2.4/environment-setup-cortexa9t2hf-neon-poky-linux-gnueabi
 
 cd build; rm -rf *; cmake ..; make -j $(nproc)
+if [[ $pwd==/home/iru/ProjectsSDK/from_508_to_5161/build ]]; then rm -rf *; cmake ..; make -j $(nproc); fi
 
 cp pbx-mtv-5161 \
 #/home/iru/poky-socfpga/poky/layers/meta-customer/recipes-customer/read-mem-tools/files
@@ -17,5 +18,5 @@ tar -cvzf /home/iru/poky-socfpga/poky/layers/meta-customer/recipes-customer/appl
 
 
 # build
-rm -rf *; cmake ..; make -j $(nproc); make create_versioned_tarball
+if [[ $pwd==/home/iru/ProjectsSDK/from_508_to_5161/build ]]; then rm -rf *; cmake ..; make -j $(nproc); make create_versioned_tarball; fi
 

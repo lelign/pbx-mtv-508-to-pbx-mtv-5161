@@ -9,6 +9,8 @@
 #include "mtv-system.h"
 #include "str-mem-dev.h"
 #include "scaler_coeff.h"
+#include <fstream> // for js
+#include <QCoreApplication>
 
 //static QLoggingCategory category("SYSTEM");
 static QLoggingCategory category("mtv-system"); // ign
@@ -22,8 +24,9 @@ const int video_size = 6220800;
 #define MOTION_THR (100)
 #define ANCIN ("/dev/tty10")
 
+/*//enum 5161
 enum {
-        REG_HDMI_OUT,
+                REG_HDMI_OUT,
                 REG_MOSAIC,
                 REG_FRAMEBUFFER_0,
                 REG_FRAMEBUFFER_1,
@@ -98,6 +101,94 @@ enum {
                 REG_DEI,
                 REG_SDI_CVO, 
                 END
+};
+*/
+
+//enum 508
+enum {
+        REG_HDMI_OUT,
+        REG_MOSAIC,
+        REG_FRAMEBUFFER_0,
+        REG_FRAMEBUFFER_1,
+        REG_FRAMEBUFFER_2,
+        REG_FRAMEBUFFER_3,
+        REG_FRAMEBUFFER_4,
+        REG_FRAMEBUFFER_5,
+        REG_FRAMEBUFFER_6,
+        REG_FRAMEBUFFER_7,
+        REG_SDI_ADAPTER,
+        REG_CVI_0,
+        REG_SCALER_0,
+        REG_CVI_1,
+        REG_SCALER_1,
+        REG_CVI_2,
+        REG_SCALER_2,
+        REG_CVI_3,
+        REG_SCALER_3,
+        REG_CVI_4,
+        REG_SCALER_4,
+        REG_CVI_5,
+        REG_SCALER_5,
+        REG_CVI_6,
+        REG_SCALER_6,
+        REG_CVI_7,
+        REG_SCALER_7,
+        REG_BUILDID,
+        REG_BARS,
+        REG_AUDIO_SELECTOR, 
+        REG_MOTION_0,
+        REG_MOTION_1,
+        REG_MOTION_2,
+        REG_MOTION_3,
+        REG_MOTION_4,
+        REG_MOTION_5,
+        REG_MOTION_6,
+        REG_MOTION_7,
+        REG_DEI,
+        REG_SDI_CVO,
+};
+
+QList <QString> enumlist = {
+        "REG_HDMI_OUT",
+        "REG_MOSAIC",
+        "REG_FRAMEBUFFER_0",
+        "REG_FRAMEBUFFER_1",
+        "REG_FRAMEBUFFER_2",
+        "REG_FRAMEBUFFER_3",
+        "REG_FRAMEBUFFER_4",
+        "REG_FRAMEBUFFER_5",
+        "REG_FRAMEBUFFER_6",
+        "REG_FRAMEBUFFER_7",
+        "REG_SDI_ADAPTER",
+        "REG_CVI_0",
+        "REG_SCALER_0",
+        "REG_CVI_1",
+        "REG_SCALER_1",
+        "REG_CVI_2",
+        "REG_SCALER_2",
+        "REG_CVI_3",
+        "REG_SCALER_3",
+        "REG_CVI_4",
+        "REG_SCALER_4",
+        "REG_CVI_5",
+        "REG_SCALER_5",
+        "REG_CVI_6",
+        "REG_SCALER_6",
+        "REG_CVI_7",
+        "REG_SCALER_7",
+        "REG_BUILDID",
+        "REG_BARS",
+        "REG_AUDIO_SELECTOR", 
+        "REG_MOTION_0",
+        "REG_MOTION_1",
+        "REG_MOTION_2",
+        "REG_MOTION_3",
+        "REG_MOTION_4",
+        "REG_MOTION_5",
+        "REG_MOTION_6",
+        "REG_MOTION_7",
+        "REG_DEI",
+        "REG_SDI_CVO"
 };
 
 #define FORMAT_SD (0<<4)
@@ -304,7 +395,19 @@ cvo_settings_t cvo_1080p25 = {
 
 PbxMtvSystem::PbxMtvSystem()
 {
-        
+        /*for js*/
+        // СТАРТ ПРИЛОЖЕНИЯ: Один раз читаем файл с диска, если он существует
+        std::ifstream input_file(log_path);
+        if (input_file.is_open()) {
+                try {
+                        input_file >> log_obj;
+                } catch (const nlohmann::json::parse_error& e) {
+                        log_obj = nlohmann::json::object(); // Если файл битый, создаем пустой {}
+                }
+                input_file.close();
+        } else {
+                log_obj = nlohmann::json::object(); // Если файла нет, создаем пустой {}
+        }
         dei = 0;
         reconfigure_timer.setSingleShot(true);
         connect(&reconfigure_timer, &QTimer::timeout, this, &PbxMtvSystem::reconfigure_timeout);
@@ -644,6 +747,7 @@ void PbxMtvSystem::scaler_reconfigure(int index, int width_in, int height_in, in
         }
 }
 
+/*//main void
 void PbxMtvSystem::reg_write(uint32_t block, uint32_t addr, uint32_t data)
 {
         strmem_reg_data reg_data;
@@ -665,6 +769,60 @@ void PbxMtvSystem::reg_write(uint32_t block, uint32_t addr, uint32_t data)
 	}
         close(fd);
 }
+*/
+
+void PbxMtvSystem::reg_write(uint32_t block, uint32_t addr, uint32_t data)
+{
+        strmem_reg_data reg_data;
+        int ret;
+        int fd;
+
+        reg_data.block = block;
+        reg_data.address = addr * 4;
+        reg_data.data = data;
+        reg_data.rw = STR_REG_WRITE;
+
+        fd = open(fname, O_RDONLY);
+        if (fd < 0) {
+                return;
+        }
+        ret = ioctl(fd, STRMEM_IOCTL_REG, &reg_data);
+        if (ret < 0) {
+                printf("ioctl error\n");
+        }
+        close(fd);
+
+        // ОБНОВЛЕНИЕ ДАННЫХ В ПАМЯТИ
+        QStringList args = QCoreApplication::arguments();
+
+        if (args.contains("--jq")) {
+                qDebug(category) << "jq mode is enabled inside MyClass!";
+        
+                std::string block_key ; // = "block_" + std::to_string(block);
+                std::string addr_key  = "addr_0x" + std::to_string(addr * 4);
+                //std::string block_list_key; 
+                if (block >= 0 && block < enumlist.size()){
+                        block_key = enumlist.at(block).toStdString();
+                        // Если блока нет в памяти, добавляем его объект
+                        if (!log_obj.contains(block_key)) {
+                                log_obj[block_key] = nlohmann::json::object();
+                        }
+
+                        // Добавляем значение регистра в массив истории этого адреса
+                        log_obj[block_key][addr_key].push_back(data);
+
+                        // СБРОС ИЗМЕНЕНИЙ НА ДИСК
+                        std::ofstream output_file(log_path);
+                        if (output_file.is_open()) {
+                                output_file << log_obj.dump(4); // pretty-print с отступом 4 пробела
+                                output_file.close();
+                        }
+                }else{
+                        qDebug(category) << "Error in reg_write with block_key block" << block;
+                }
+        }
+}
+
 
 void PbxMtvSystem::bars_configure(int index, int x, int x2, int y, int scale, int enable_1, int enable_2)
 {
