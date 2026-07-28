@@ -33,6 +33,7 @@ private:
 
     void sn75dp159_write(uint8_t reg_addr, uint8_t reg_data);
     void sn75dp159_read(uint8_t reg_addr, uint8_t *reg_data);
+    bool sn75_Mode;// Флаг активации расширенных логов из аргументов командной строки
 
 public slots:
     void sn75dp159_device_id_read();

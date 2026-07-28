@@ -1,10 +1,15 @@
 #include "scte_104.h"
+#include <QCoreApplication>
 
 static QLoggingCategory category("Scte_104");
 
 Scte_104::Scte_104(int channel, QObject *parent) : QObject(parent)
 {
-    qCDebug(category).noquote() << QString("Instance for channel %1. Creating...").arg(channel);
+    scte_Mode = QCoreApplication::arguments().contains("--scte");
+    if(scte_Mode){
+        qCDebug(category).noquote() << QString("Instance for channel %1. Creating...").arg(channel);
+    }
+    
 
     this->channel = channel;
 

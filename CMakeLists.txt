@@ -46,6 +46,7 @@ add_subdirectory(zvbi-test)
 add_subdirectory(profnext)
 add_subdirectory(tsl)
 
+
 # --- Исполняемый файл 1: pbx-mtv-508 ---
 add_executable(pbx-mtv-5161
     pbx-mtv-5161-main.cpp
@@ -121,6 +122,10 @@ target_link_libraries(pbx-mtv-5161 PRIVATE
 add_executable(rgbyuv-test rgbyuv-test/rgbyuv-test.cpp)
 target_link_libraries(rgbyuv-test PRIVATE Qt5::Widgets)
 
+# --- Исполняемый файл 2: qt-apt ---
+add_executable(qt-app qt-app/qt-app.cpp)
+target_link_libraries(qt-app PRIVATE Qt5::Widgets)
+
 # --- Исполняемый файл 3: read_mem ---
 # add_executable(read_mem read_mem/read_mem.cpp)
 # target_link_libraries(read_mem PRIVATE Qt5::Widgets Qt5::Core)
@@ -132,19 +137,3 @@ install(TARGETS pbx-mtv-5161 rgbyuv-test DESTINATION bin)
 
 
 #edited by II
-
-# Ограничиваем область видимости: этот таргет работает только на Linux
-add_custom_target(create_versioned_tarball
-    # 1. Создаем файл счетчика, если его нет
-    COMMAND /bin/bash -c "[ ! -f .build_version ] && echo 1 > .build_version || true"
-    
-    # 2. Читаем версию, выводим лог и пакуем tar.gz
-    COMMAND /bin/bash -c "VERSION=\$(cat .build_version) && echo \"Archiving build v\${VERSION}...\" && tar -cvzf \"/home/iru/poky-socfpga/poky/layers/meta-customer/recipes-customer/application_26_05/files/pbx-mtv-5161-26.0\${VERSION}.tar.gz\" -C \"${CMAKE_CURRENT_SOURCE_DIR}\" ."
-             
-    # 3. Инкрементируем версию для следующего раза
-    COMMAND /bin/bash -c "VERSION=\$(cat .build_version) && echo \$((\${VERSION} + 1)) > .build_version"
-    
-    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    COMMENT "Forming incremental tar.gz archive..."
-    VERBATIM
-)

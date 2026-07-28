@@ -13,7 +13,7 @@
 #include <QCoreApplication>
 
 //static QLoggingCategory category("SYSTEM");
-static QLoggingCategory category("mtv-system"); // ign
+static QLoggingCategory category("\033[34m MTV-SYSTEM\033[0m"); // ign blue
 
 const char * fname = "/dev/str-mem";
 //const int video_size = 1920*1080*3; // RGB
@@ -395,18 +395,26 @@ cvo_settings_t cvo_1080p25 = {
 
 PbxMtvSystem::PbxMtvSystem()
 {
-        /*for js*/
-        // СТАРТ ПРИЛОЖЕНИЯ: Один раз читаем файл с диска, если он существует
-        std::ifstream input_file(log_path);
-        if (input_file.is_open()) {
-                try {
-                        input_file >> log_obj;
-                } catch (const nlohmann::json::parse_error& e) {
-                        log_obj = nlohmann::json::object(); // Если файл битый, создаем пустой {}
+        // Проверяем аргумент один раз при старте
+        m_jqMode = QCoreApplication::arguments().contains("--jq");
+        m_rw = QCoreApplication::arguments().contains("--rwdis");
+        
+        if (m_jqMode) {
+                //qDebug(category) << "jq mode is enabled for PbxMtvSystem";
+        
+                /*for js*/
+                // СТАРТ ПРИЛОЖЕНИЯ: Один раз читаем файл с диска, если он существует
+                std::ifstream input_file(log_path);
+                if (input_file.is_open()) {
+                        try {
+                                input_file >> log_obj;
+                        } catch (const nlohmann::json::parse_error& e) {
+                                log_obj = nlohmann::json::object(); // Если файл битый, создаем пустой {}
+                        }
+                        input_file.close();
+                } else {
+                        log_obj = nlohmann::json::object(); // Если файла нет, создаем пустой {}
                 }
-                input_file.close();
-        } else {
-                log_obj = nlohmann::json::object(); // Если файла нет, создаем пустой {}
         }
         dei = 0;
         reconfigure_timer.setSingleShot(true);
@@ -781,22 +789,25 @@ void PbxMtvSystem::reg_write(uint32_t block, uint32_t addr, uint32_t data)
         reg_data.address = addr * 4;
         reg_data.data = data;
         reg_data.rw = STR_REG_WRITE;
+        if (m_rw){
+                fd = open(fname, O_RDONLY);
+                if (fd < 0) {
+                        return;
+                }
+                ret = ioctl(fd, STRMEM_IOCTL_REG, &reg_data);
+                if (ret < 0) {
+                        printf("ioctl error\n");
+                }
+                close(fd);
 
-        fd = open(fname, O_RDONLY);
-        if (fd < 0) {
-                return;
         }
-        ret = ioctl(fd, STRMEM_IOCTL_REG, &reg_data);
-        if (ret < 0) {
-                printf("ioctl error\n");
-        }
-        close(fd);
+        
 
         // ОБНОВЛЕНИЕ ДАННЫХ В ПАМЯТИ
         QStringList args = QCoreApplication::arguments();
 
         if (args.contains("--jq")) {
-                qDebug(category) << "jq mode is enabled inside MyClass!";
+                //qDebug(category) << "jq mode is enabled";
         
                 std::string block_key ; // = "block_" + std::to_string(block);
                 std::string addr_key  = "addr_0x" + std::to_string(addr * 4);
@@ -858,15 +869,19 @@ uint32_t PbxMtvSystem::reg_read(uint32_t block, uint32_t addr)
         reg_data.data = 0;
         reg_data.rw = STR_REG_READ;
 
-        fd = open(fname, O_RDONLY);
-        if(fd<0){
-                return 0;
+        if (m_rw){
+                fd = open(fname, O_RDONLY);
+                if(fd<0){
+                        return 0;
+                }
+                ret = ioctl(fd, STRMEM_IOCTL_REG, &reg_data);
+                if(ret<0){
+                        printf("ioctl error\n");
+                }
+                close(fd);
         }
-        ret = ioctl(fd, STRMEM_IOCTL_REG, &reg_data);
-	if(ret<0){
-	        printf("ioctl error\n");
-	}
-        close(fd);
+
+        
         return reg_data.data;
 }
 
@@ -966,30 +981,29 @@ const int16_t uint8_crcb_b_data[] = {
         56, -9, 56, -9, 56, -9, 56, -9,
 };
 
-/*void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer)
-{
-        const uint8_t * line = img->constScanLine(y);
+// void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer)
+// {
+//         const uint8_t * line = img->constScanLine(y);
 
-        for(int x=0; x<width; x++){
-                uint8x8x3_t ycrcb_data;
+//         for(int x=0; x<width; x++){
+//                 uint8x8x3_t ycrcb_data;
                 
-                // вычисление y
-                uint8x8x4_t rgb_data = vld4_u8(line + x*8*4);
-                ycrcb_data.val[0] = rgb_data.val[3];
-                int16x8_t data_y = vmulq_s16(vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[2], vmov_n_u8(0))), vmovq_n_s16(27));
-                data_y = vmlaq_s16(data_y, vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[1], vmov_n_u8(0))), vmovq_n_s16(92));
-                data_y = vmlaq_s16(data_y, vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[0], vmov_n_u8(0))), vmovq_n_s16(9));
-                ycrcb_data.val[1] = vreinterpret_u8_s8(vshrn_n_s16(data_y, 7));
+//                 // вычисление y
+//                 uint8x8x4_t rgb_data = vld4_u8(line + x*8*4);
+//                 ycrcb_data.val[0] = rgb_data.val[3];
+//                 int16x8_t data_y = vmulq_s16(vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[2], vmov_n_u8(0))), vmovq_n_s16(27));
+//                 data_y = vmlaq_s16(data_y, vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[1], vmov_n_u8(0))), vmovq_n_s16(92));
+//                 data_y = vmlaq_s16(data_y, vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[0], vmov_n_u8(0))), vmovq_n_s16(9));
+//                 ycrcb_data.val[1] = vreinterpret_u8_s8(vshrn_n_s16(data_y, 7));
 
-                // вычисление cr
-                int16x8_t data_cr = vmulq_s16(vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[2], vmov_n_u8(0))), vld1q_s16(uint8_crcb_r_data));
-                data_cr = vmlaq_s16(data_cr, vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[1], vmov_n_u8(0))), vld1q_s16(uint8_crcb_g_data));
-                data_cr = vmlaq_s16(data_cr, vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[0], vmov_n_u8(0))), vld1q_s16(uint8_crcb_b_data));
-                ycrcb_data.val[2] = vreinterpret_u8_s8(vadd_s8(vshrn_n_s16(data_cr, 7), vmov_n_s8(128)));
-                vst3_u8(buffer+x*3*8, ycrcb_data);
-        }
-}
-*/
+//                 // вычисление cr
+//                 int16x8_t data_cr = vmulq_s16(vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[2], vmov_n_u8(0))), vld1q_s16(uint8_crcb_r_data));
+//                 data_cr = vmlaq_s16(data_cr, vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[1], vmov_n_u8(0))), vld1q_s16(uint8_crcb_g_data));
+//                 data_cr = vmlaq_s16(data_cr, vreinterpretq_s16_u16(vaddl_u8(rgb_data.val[0], vmov_n_u8(0))), vld1q_s16(uint8_crcb_b_data));
+//                 ycrcb_data.val[2] = vreinterpret_u8_s8(vadd_s8(vshrn_n_s16(data_cr, 7), vmov_n_s8(128)));
+//                 vst3_u8(buffer+x*3*8, ycrcb_data);
+//         }
+// }
 
 /*
 //В предоставленном коде функции конвертации convert_line содержится несколько серьезных архитектурных и математических ошибок, которые гарантированно приводят к порче памяти, неверной работе с указателями и артефактам цвета на экране.Ниже подробно разобраны эти ошибки и представлен полностью исправленный, оптимизированный и рабочий вариант функции ARM NEON для конвертации ARGB32 в честный формат YUYV (YUV422).💥 Критические ошибки текущего кодаПорча памяти через vst2_u8 (Строка 45):Вызов vst2_u8(ptr, final_yuyv) записывает в память 32 байта, а не 16! Переменная final_yuyv имеет тип uint8x8x2_t (два вектора по 8 байт). Инструкция vst2 берет эти два вектора и перемешивает их побайтово при записи в память. В итоге вы пишете 32 байта и затираете следующие 8 пикселей кадра, вызывая каскадное повреждение памяти.Сдвиг адреса записи (Строка 45):Вы передаете адрес buffer + x * 2. На итерациях цикла x увеличивается на 8. Соответственно, смещение адреса равно 0, 16, 32... байт. Но так как vst2 ошибочно выгружает 32 байта, каждая следующая итерация затирает вторую половину данных предыдущей итерации.Игнорирование dst_buffer (Строка 6, 45):Вы создали удобный указатель uint16_t * dst_buffer, но в конце функции проигнорировали его и пишете в сырой buffer типа uint8_t *.Сломанная математика знаков (Строки 17, 24):Функции vshrn_n_s16 и vadd_s8 используются с нарушением знаковых типов. Хрома и яркость в YUV — это беззнаковые величины (uint8_t), а промежуточные знаковые значения после сдвига нужно приводить через насыщение (vqmovun_s16), иначе значения цвета > 127 превратятся в случайный шум.Отсутствие реального Cb (Строка 28):Заполнение cb_val = vmov_n_u8(128) сделает изображение полностью зеленым/пурпурным (так как цветоразностный синий канал отключен). Нам нужно посчитать честный Cb.
@@ -1148,126 +1162,527 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
 
 /*Обновленный метод convert_line (с NEON 4:4:4)Векторная логика полностью перестроена. Теперь мы не прореживаем цветовые компоненты (как это делалось для YUYV 4:2:2 via vuzp), а сохраняем полное разрешение Y, Cr, Cb для каждого пикселя. Код собирает их в структуру uint8x8x3_t и записывает по 24 байта за итерацию (vst3_u8).
 */
-void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer)
-{
-        if (y < 0 || y >= img->height()) {
-                qCritical() << "CRITICAL ERROR: Requested 'y' line" << y << "is out of QImage bounds";
-                return;
-        }
-        if (width <= 0 || width > img->width() || width > 1920) {
-                qCritical() << "CRITICAL ERROR: Invalid width:" << width;
-                return;
-        }
 
-        uint8_t * dst = buffer;
-        const uint8_t * line = img->constScanLine(y);
-        if (!line) {
-                qCritical() << "CRITICAL ERROR: constScanLine(" << y << ") returned NULL!";
-                return;
-        }
 
-        // Коэффициенты BT.601
-        int16x8_t y_r  = vmovq_n_s16(77);
-        int16x8_t y_g  = vmovq_n_s16(150);
-        int16x8_t y_b  = vmovq_n_s16(29);
-        int16x8_t cb_r = vmovq_n_s16(-43);
-        int16x8_t cb_g = vmovq_n_s16(-85);
-        int16x8_t cb_b = vmovq_n_s16(128);
-        int16x8_t cr_r = vmovq_n_s16(128);
-        int16x8_t cr_g = vmovq_n_s16(-107);
-        int16x8_t cr_b = vmovq_n_s16(-21);
+// void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer)
+// {
+//         if (y < 0 || y >= img->height()) {
+//                 qCritical() << "CRITICAL ERROR: Requested 'y' line" << y << "is out of QImage bounds";
+//                 return;
+//         }
+//         if (width <= 0 || width > img->width() || width > 1920) {
+//                 qCritical() << "CRITICAL ERROR: Invalid width:" << width;
+//                 return;
+//         }
 
-        // Обрабатываем по 8 пикселей за итерацию
-        /*        for(int x = 0; x < width; x += 8) {
-                // Загружаем ARGB (4 канала). val[3] содержит Alpha, если он нужен драйверу в будущем
-                uint8x8x4_t rgb = vld4_u8(line + x * 4);
+//         uint8_t * dst = buffer;
+//         const uint8_t * line = img->constScanLine(y);
+//         if (!line) {
+//                 qCritical() << "CRITICAL ERROR: constScanLine(" << y << ") returned NULL!";
+//                 return;
+//         }
 
-                int16x8_t r = vreinterpretq_s16_u16(vmovl_u8(rgb.val[2]));
-                int16x8_t g = vreinterpretq_s16_u16(vmovl_u8(rgb.val[1]));
-                int16x8_t b = vreinterpretq_s16_u16(vmovl_u8(rgb.val[0]));
+//         // Коэффициенты BT.601
+//         int16x8_t y_r  = vmovq_n_s16(77);
+//         int16x8_t y_g  = vmovq_n_s16(150);
+//         int16x8_t y_b  = vmovq_n_s16(29);
+//         int16x8_t cb_r = vmovq_n_s16(-43);
+//         int16x8_t cb_g = vmovq_n_s16(-85);
+//         int16x8_t cb_b = vmovq_n_s16(128);
+//         int16x8_t cr_r = vmovq_n_s16(128);
+//         int16x8_t cr_g = vmovq_n_s16(-107);
+//         int16x8_t cr_b = vmovq_n_s16(-21);
 
-                // Расчет компоненты Y
-                int16x8_t y_acc = vmulq_s16(r, y_r);
-                y_acc = vmlaq_s16(y_acc, g, y_g);
-                y_acc = vmlaq_s16(y_acc, b, y_b);
-                uint8x8_t y_val = vqmovun_s16(vshrq_n_s16(y_acc, 8));
+//         // Обрабатываем по 8 пикселей за итерацию
+//         /*        for(int x = 0; x < width; x += 8) {
+//                 // Загружаем ARGB (4 канала). val[3] содержит Alpha, если он нужен драйверу в будущем
+//                 uint8x8x4_t rgb = vld4_u8(line + x * 4);
 
-                // Расчет компоненты Cb
-                int16x8_t cb_acc = vmulq_s16(r, cb_r);
-                cb_acc = vmlaq_s16(cb_acc, g, cb_g);
-                cb_acc = vmlaq_s16(cb_acc, b, cb_b);
-                uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
+//                 int16x8_t r = vreinterpretq_s16_u16(vmovl_u8(rgb.val[2]));
+//                 int16x8_t g = vreinterpretq_s16_u16(vmovl_u8(rgb.val[1]));
+//                 int16x8_t b = vreinterpretq_s16_u16(vmovl_u8(rgb.val[0]));
 
-                // Расчет компоненты Cr
-                int16x8_t cr_acc = vmulq_s16(r, cr_r);
-                cr_acc = vmlaq_s16(cr_acc, g, cr_g);
-                cr_acc = vmlaq_s16(cr_acc, b, cr_b);
-                uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
+//                 // Расчет компоненты Y
+//                 int16x8_t y_acc = vmulq_s16(r, y_r);
+//                 y_acc = vmlaq_s16(y_acc, g, y_g);
+//                 y_acc = vmlaq_s16(y_acc, b, y_b);
+//                 uint8x8_t y_val = vqmovun_s16(vshrq_n_s16(y_acc, 8));
 
-                // Упаковываем в формат 3 байта на пиксель: [Y][Cr][Cb]
-                // Примечание: Если вашему драйверу нужен порядок Y, Cb, Cr — просто поменяйте местами присвоения ниже
-                uint8x8x3_t ycrcb_struct;
-                ycrcb_struct.val[0] = y_val;
-                ycrcb_struct.val[1] = cr_val;
-                ycrcb_struct.val[2] = cb_val;
+//                 // Расчет компоненты Cb
+//                 int16x8_t cb_acc = vmulq_s16(r, cb_r);
+//                 cb_acc = vmlaq_s16(cb_acc, g, cb_g);
+//                 cb_acc = vmlaq_s16(cb_acc, b, cb_b);
+//                 uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
 
-                // Сохраняем 8 пикселей в память интерливом (8 пикселей * 3 байта = 24 байта)
-                vst3_u8(dst, ycrcb_struct);
+//                 // Расчет компоненты Cr
+//                 int16x8_t cr_acc = vmulq_s16(r, cr_r);
+//                 cr_acc = vmlaq_s16(cr_acc, g, cr_g);
+//                 cr_acc = vmlaq_s16(cr_acc, b, cr_b);
+//                 uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
 
-                // Сдвигаем указатель назначения на 24 байта вперед
-                dst += 24;
-        }
-*/
-        // Исправленный цикл внутри convert_line
-        // САМ ЦИКЛ ОБРАБОТКИ СТРОКИ
-        for(int x = 0; x < width; x += 8) {
-                // 1. Загружаем 8 пикселей ARGB (32 байта)
-                uint8x8x4_t rgb_data = vld4_u8(line + x * 4);
+//                 // Упаковываем в формат 3 байта на пиксель: [Y][Cr][Cb]
+//                 // Примечание: Если вашему драйверу нужен порядок Y, Cb, Cr — просто поменяйте местами присвоения ниже
+//                 uint8x8x3_t ycrcb_struct;
+//                 ycrcb_struct.val[0] = y_val;
+//                 ycrcb_struct.val[1] = cr_val;
+//                 ycrcb_struct.val[2] = cb_val;
+
+//                 // Сохраняем 8 пикселей в память интерливом (8 пикселей * 3 байта = 24 байта)
+//                 vst3_u8(dst, ycrcb_struct);
+
+//                 // Сдвигаем указатель назначения на 24 байта вперед
+//                 dst += 24;
+//         }
+// */
+//         // Исправленный цикл внутри convert_line
+//         // САМ ЦИКЛ ОБРАБОТКИ СТРОКИ
+
+
+
+
+
+
+
+
+//         for(int x = 0; x < width; x += 8) {
+//                 // 1. Загружаем 8 пикселей ARGB (32 байта)
+//                 uint8x8x4_t rgb_data = vld4_u8(line + x * 4);
                 
-                // В QImage Format_ARGB32/RGB32 каналы идут в порядке B, G, R, A
-                uint8x8_t b_val = rgb_data.val[0]; // blue
-                uint8x8_t g_val = rgb_data.val[1]; // Green
-                uint8x8_t r_val = rgb_data.val[2]; // Red
-                uint8x8_t a_val = rgb_data.val[3]; // Alpha
+//                 // В QImage Format_ARGB32/RGB32 каналы идут в порядке B, G, R, A
+//                 uint8x8_t b_val = rgb_data.val[0]; // blue
+//                 uint8x8_t g_val = rgb_data.val[1]; // Green
+//                 uint8x8_t r_val = rgb_data.val[2]; // Red
+//                 uint8x8_t a_val = rgb_data.val[3]; // Alpha
 
-                // Расширяем 8-битные каналы до 16-битных со знаком для расчетов
-                int16x8_t r = vreinterpretq_s16_u16(vmovl_u8(r_val));
-                int16x8_t g = vreinterpretq_s16_u16(vmovl_u8(g_val));
-                int16x8_t b = vreinterpretq_s16_u16(vmovl_u8(b_val));
+//                 // Расширяем 8-битные каналы до 16-битных со знаком для расчетов
+//                 int16x8_t r = vreinterpretq_s16_u16(vmovl_u8(r_val));
+//                 int16x8_t g = vreinterpretq_s16_u16(vmovl_u8(g_val));
+//                 int16x8_t b = vreinterpretq_s16_u16(vmovl_u8(b_val));
 
-                // 2. РАСЧЕТ И ОБЪЯВЛЕНИЕ Y_VAL
-                int16x8_t y_acc = vmulq_s16(r, y_r);
-                y_acc = vmlaq_s16(y_acc, g, y_g);
-                y_acc = vmlaq_s16(y_acc, b, y_b);
-                uint8x8_t y_val = vqmovun_s16(vshrq_n_s16(y_acc, 8));
+//                 // 2. РАСЧЕТ И ОБЪЯВЛЕНИЕ Y_VAL
+//                 int16x8_t y_acc = vmulq_s16(r, y_r);
+//                 y_acc = vmlaq_s16(y_acc, g, y_g);
+//                 y_acc = vmlaq_s16(y_acc, b, y_b);
+//                 uint8x8_t y_val = vqmovun_s16(vshrq_n_s16(y_acc, 8));
 
-                // Расчет временных Cb и Cr
-                int16x8_t cb_acc = vmulq_s16(r, cb_r);
-                cb_acc = vmlaq_s16(cb_acc, g, cb_g);
-                cb_acc = vmlaq_s16(cb_acc, b, cb_b);
-                uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
+//                 // Расчет временных Cb и Cr
+//                 int16x8_t cb_acc = vmulq_s16(r, cb_r);
+//                 cb_acc = vmlaq_s16(cb_acc, g, cb_g);
+//                 cb_acc = vmlaq_s16(cb_acc, b, cb_b);
+//                 uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
 
-                int16x8_t cr_acc = vmulq_s16(r, cr_r);
-                cr_acc = vmlaq_s16(cr_acc, g, cr_g);
-                cr_acc = vmlaq_s16(cr_acc, b, cr_b);
-                uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
+//                 int16x8_t cr_acc = vmulq_s16(r, cr_r);
+//                 cr_acc = vmlaq_s16(cr_acc, g, cr_g);
+//                 cr_acc = vmlaq_s16(cr_acc, b, cr_b);
+//                 uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
 
-                // 3. РАСЧЕТ И ОБЪЯВЛЕНИЕ UV_VAL (Субдискретизация 4:2:2)
-                uint8x8x2_t cb_pairs = vuzp_u8(cb_val, cb_val); 
-                uint8x8x2_t cr_pairs = vuzp_u8(cr_val, cr_val); 
-                uint8x8x2_t uv_interleaved = vzip_u8(cb_pairs.val[0], cr_pairs.val[0]);
-                uint8x8_t uv_val = uv_interleaved.val[0]; // Вот объявление uv_val!
+//                 // 3. РАСЧЕТ И ОБЪЯВЛЕНИЕ UV_VAL (Субдискретизация 4:2:2)
+//                 uint8x8x2_t cb_pairs = vuzp_u8(cb_val, cb_val); 
+//                 uint8x8x2_t cr_pairs = vuzp_u8(cr_val, cr_val); 
+//                 uint8x8x2_t uv_interleaved = vzip_u8(cb_pairs.val[0], cr_pairs.val[0]);
+//                 uint8x8_t uv_val = uv_interleaved.val[0]; // Вот объявление uv_val!
 
-                // 4. УПАКОВКА В СТРУКТУРУ И ВЫГРУЗКА В ПАМЯТЬ
-                uint8x8x3_t ycrcb_data;
-                ycrcb_data.val[0] = y_val;  // Y
-                ycrcb_data.val[1] = uv_val; // CrCb
-                ycrcb_data.val[2] = a_val;  // Alpha
+//                 // 4. УПАКОВКА В СТРУКТУРУ И ВЫГРУЗКА В ПАМЯТЬ
+//                 uint8x8x3_t ycrcb_data;
+//                 ycrcb_data.val[1] = y_val;  // Y
+//                 ycrcb_data.val[2] = uv_val; // CrCb               
+//                 ycrcb_data.val[0] = a_val;  // Alpha
 
-                vst3_u8(dst, ycrcb_data);
-                dst += 24; // Сдвиг на 24 байта (8 пикселей * 3 байта)
+//                 vst3_u8(dst, ycrcb_data);
+//                 dst += 24; // Сдвиг на 24 байта (8 пикселей * 3 байта)
+//         }
+// }
+
+// void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer)
+// {
+//         if (y < 0 || y >= img->height()) {
+//                 qCritical() << "CRITICAL ERROR: Requested 'y' line" << y << "is out of QImage bounds";
+//                 return;
+//         }
+//         if (width <= 0 || width > img->width() || width > 1920 || (width % 8) != 0) {
+//                 qCritical() << "CRITICAL ERROR: Invalid width:" << width << "(must be multiple of 8)";
+//                 return;
+//         }
+
+//         // Пишем строго с начала переданного буфера строки!
+//         uint8_t * dst = buffer; 
+//         const uint8_t * line = img->constScanLine(y);
+//         if (!line) {
+//                 qCritical() << "CRITICAL ERROR: constScanLine(" << y << ") returned NULL!";
+//                 return;
+//         }
+
+//         // Коэффициенты BT.601
+//         int16x8_t y_r  = vmovq_n_s16(77);
+//         int16x8_t y_g  = vmovq_n_s16(150);
+//         int16x8_t y_b  = vmovq_n_s16(29);
+//         int16x8_t cb_r = vmovq_n_s16(-43);
+//         int16x8_t cb_g = vmovq_n_s16(-85);
+//         int16x8_t cb_b = vmovq_n_s16(128);
+//         int16x8_t cr_r = vmovq_n_s16(128);
+//         int16x8_t cr_g = vmovq_n_s16(-107);
+//         int16x8_t cr_b = vmovq_n_s16(-21);
+
+//         for(int x = 0; x < width; x += 8) {
+//                 uint8x8x4_t rgb_data = vld4_u8(line + x * 4);
+                
+//                 uint8x8_t b_val = rgb_data.val[0];
+//                 uint8x8_t g_val = rgb_data.val[1];
+//                 uint8x8_t r_val = rgb_data.val[2];
+//                 uint8x8_t a_val = rgb_data.val[3];
+
+//                 int16x8_t r = vreinterpretq_s16_u16(vmovl_u8(r_val));
+//                 int16x8_t g = vreinterpretq_s16_u16(vmovl_u8(g_val));
+//                 int16x8_t b = vreinterpretq_s16_u16(vmovl_u8(b_val));
+
+//                 int16x8_t y_acc = vmulq_s16(r, y_r);
+//                 y_acc = vmlaq_s16(y_acc, g, y_g);
+//                 y_acc = vmlaq_s16(y_acc, b, y_b);
+//                 uint8x8_t y_val = vqmovun_s16(vshrq_n_s16(y_acc, 8));
+
+//                 int16x8_t cb_acc = vmulq_s16(r, cb_r);
+//                 cb_acc = vmlaq_s16(cb_acc, g, cb_g);
+//                 cb_acc = vmlaq_s16(cb_acc, b, cb_b);
+//                 uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
+
+//                 int16x8_t cr_acc = vmulq_s16(r, cr_r);
+//                 cr_acc = vmlaq_s16(cr_acc, g, cr_g);
+//                 cr_acc = vmlaq_s16(cr_acc, b, cr_b);
+//                 uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
+
+//                 uint8x8x2_t cb_pairs = vuzp_u8(cb_val, cb_val); 
+//                 uint8x8x2_t cr_pairs = vuzp_u8(cr_val, cr_val); 
+
+//                 uint8x8x2_t chroma_interleaved = vzip_u8(cb_pairs.val[0], cr_pairs.val[0]);
+//                 uint8x8_t chroma_val = chroma_interleaved.val[0];
+
+//                 uint8x8x3_t ycrcb_data;
+//                 ycrcb_data.val[0] = chroma_val; // Cb, Cr, Cb, Cr...
+//                 ycrcb_data.val[1] = y_val;      // Y0, Y1, Y2, Y3...
+//                 ycrcb_data.val[2] = a_val;      // A0, A1, A2, A3...
+
+//                 vst3_u8(dst, ycrcb_data);
+//                 dst += 24; 
+//         }
+// }
+
+
+// void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer)
+// {
+//         if (y < 0 || y >= img->height()) {
+//                 qCritical() << "CRITICAL ERROR: Requested 'y' line" << y << "is out of QImage bounds";
+//                 return;
+//         }
+//         if (width <= 0 || width > img->width() || width > 1920 || (width % 8) != 0) {
+//                 qCritical() << "CRITICAL ERROR: Invalid width:" << width << "(must be multiple of 8)";
+//                 return;
+//         }
+
+//         uint8_t * dst = buffer; 
+//         const uint8_t * line = img->constScanLine(y);
+//         if (!line) {
+//                 qCritical() << "CRITICAL ERROR: constScanLine(" << y << ") returned NULL!";
+//                 return;
+//         }
+
+//         // Коэффициенты BT.601
+//         int16x8_t y_r  = vmovq_n_s16(77);
+//         int16x8_t y_g  = vmovq_n_s16(150);
+//         int16x8_t y_b  = vmovq_n_s16(29);
+//         int16x8_t cb_r = vmovq_n_s16(-43);
+//         int16x8_t cb_g = vmovq_n_s16(-85);
+//         int16x8_t cb_b = vmovq_n_s16(128);
+//         int16x8_t cr_r = vmovq_n_s16(128);
+//         int16x8_t cr_g = vmovq_n_s16(-107);
+//         int16x8_t cr_b = vmovq_n_s16(-21);
+
+//         for(int x = 0; x < width; x += 8) {
+//                 // Загружаем 8 пикселей BGRA (в формате QImage Format_ARGB32)
+//                 uint8x8x4_t rgb_data = vld4_u8(line + x * 4);
+                
+//                 uint8x8_t b_val = rgb_data.val[0];
+//                 uint8x8_t g_val = rgb_data.val[1];
+//                 uint8x8_t r_val = rgb_data.val[2];
+//                 uint8x8_t a_val = rgb_data.val[3];
+
+//                 int16x8_t r = vreinterpretq_s16_u16(vmovl_u8(r_val));
+//                 int16x8_t g = vreinterpretq_s16_u16(vmovl_u8(g_val));
+//                 int16x8_t b = vreinterpretq_s16_u16(vmovl_u8(b_val));
+
+//                 // 1. Вычисляем Y (Яркость)
+//                 int16x8_t y_acc = vmulq_s16(r, y_r);
+//                 y_acc = vmlaq_s16(y_acc, g, y_g);
+//                 y_acc = vmlaq_s16(y_acc, b, y_b);
+//                 uint8x8_t y_val = vqmovun_s16(vshrq_n_s16(y_acc, 8));
+
+//                 // 2. Вычисляем Cb
+//                 int16x8_t cb_acc = vmulq_s16(r, cb_r);
+//                 cb_acc = vmlaq_s16(cb_acc, g, cb_g);
+//                 cb_acc = vmlaq_s16(cb_acc, b, cb_b);
+//                 uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
+
+//                 // 3. Вычисляем Cr
+//                 int16x8_t cr_acc = vmulq_s16(r, cr_r);
+//                 cr_acc = vmlaq_s16(cr_acc, g, cr_g);
+//                 cr_acc = vmlaq_s16(cr_acc, b, cr_b);
+//                 uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
+
+//                 // 4. СУБДИСКРЕТИЗАЦИЯ ХРОМЫ (4:2:2)
+//                 // Складываем соседние пиксели (0+1, 2+3, 4+5, 6+7) расширяя до 16 бит
+//                 uint16x4_t cb_pair_sum = vpaddl_u8(cb_val);
+//                 uint16x4_t cr_pair_sum = vpaddl_u8(cr_val);
+
+//                 // Делим на 2 сдвигом, сужая обратно до 8 бит (получаем 4 значения хромы из 8)
+//                 uint8x8_t cb_downsampled = vshrn_n_u16(vcombine_u16(cb_pair_sum, cb_pair_sum), 1);
+//                 uint8x8_t cr_downsampled = vshrn_n_u16(vcombine_u16(cr_pair_sum, cr_pair_sum), 1);
+
+//                 // 5. РАЗДЕЛЕНИЕ НА ЧЁТНЫЕ И НЕЧЁТНЫЕ КОМПОНЕНТЫ Y И A
+//                 // vuzp делит вектор 8-байт на два по 4-байта (чётные индексы пойдут в .val[0], нечётные в .val[1])
+//                 uint8x8x2_t y_split = vuzp_u8(y_val, y_val);
+//                 uint8x8x2_t a_split = vuzp_u8(a_val, a_val);
+
+//                 uint8x8_t y_even = y_split.val[0]; // Y0, Y2, Y4, Y6
+//                 uint8x8_t y_odd  = y_split.val[1]; // Y1, Y3, Y5, Y7
+//                 uint8x8_t a_even = a_split.val[0]; // A0, A2, A4, A6
+//                 uint8x8_t a_odd  = a_split.val[1]; // A1, A3, A5, A7
+
+//                 // 6. СБОРКА СТРУКТУР ДЛЯ ЧЁТНЫХ (Cr/Y/A) И НЕЧЁТНЫХ (Cb/Y/A) МАКРОПИКСЕЛЕЙ
+//                 uint8x8x3_t even_pixels;
+//                 even_pixels.val[0] = cr_downsampled; // Нам нужны только первые 4 байта, они запишутся правильно
+//                 even_pixels.val[1] = y_even;
+//                 even_pixels.val[2] = a_even;
+
+//                 uint8x8x3_t odd_pixels;
+//                 odd_pixels.val[0] = cb_downsampled;
+//                 odd_pixels.val[1] = y_odd;
+//                 odd_pixels.val[2] = a_odd;
+
+//                 // 7. ИНТЕРЛИВИНГ И ПЕРЕМЕШИВАНИЕ ПАР ПИКСЕЛЕЙ (Через регистры общего назначения процессора)
+//                 // Так как vst3_u8 работает линейно по всему 8-байтовому вектору, проще всего 
+//                 // выгрузить пары на лету, используя быстрые 32-битные/64-битные операции NEON
+//                 uint32x2_t* dst_32 = reinterpret_cast<uint32x2_t*>(dst);
+
+//                 // Чередуем запись в память по 3 байта на пиксель (шаг 24 байта на 8 пикселей)
+//                 for (int p = 0; p < 4; ++p) {
+//                         // Пиксель Чётный (Cr / Y / A)
+//                         dst[0] = even_pixels.val[0][p];
+//                         dst[1] = even_pixels.val[1][p];
+//                         dst[2] = even_pixels.val[2][p];
+//                         dst += 3;
+
+//                         // Пиксель Нечётный (Cb / Y / A)
+//                         dst[0] = odd_pixels.val[0][p];
+//                         dst[1] = odd_pixels.val[1][p];
+//                         dst[2] = odd_pixels.val[2][p];
+//                         dst += 3;
+//                 }
+//         }
+// }
+
+
+
+
+
+
+// void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer) {
+//     // Входные проверки (остаются без изменений)
+//     if (y < 0 || y >= img->height()) return;
+//     if (width <= 0 || width > img->width() || (width % 8) != 0) return;
+
+//     uint8_t * dst = buffer;
+//     const uint8_t * line = img->constScanLine(y);
+//     if (!line) return;
+
+//     // Константы BT.601 (16-бит со знаком)
+//     int16x8_t y_r = vmovq_n_s16(77);
+//     int16x8_t y_g = vmovq_n_s16(150);
+//     int16x8_t y_b = vmovq_n_s16(29);
+//     int16x8_t cb_r = vmovq_n_s16(-43);
+//     int16x8_t cb_g = vmovq_n_s16(-85);
+//     int16x8_t cb_b = vmovq_n_s16(128);
+//     int16x8_t cr_r = vmovq_n_s16(128);
+//     int16x8_t cr_g = vmovq_n_s16(-107);
+//     int16x8_t cr_b = vmovq_n_s16(-21);
+
+//     for(int x = 0; x < width; x += 8) {
+//         // Шаг 1: Загрузка 8 пикселей BGRA
+//         uint8x8x4_t rgb_data = vld4_u8(line + x * 4);
+//         uint8x8_t r_val = rgb_data.val[0];
+//         uint8x8_t g_val = rgb_data.val[1];
+//         uint8x8_t b_val = rgb_data.val[2];
+//         uint8x8_t a_val = rgb_data.val[3];
+
+//         int16x8_t r = vreinterpretq_s16_u16(vmovl_u8(r_val));
+//         int16x8_t g = vreinterpretq_s16_u16(vmovl_u8(g_val));
+//         int16x8_t b = vreinterpretq_s16_u16(vmovl_u8(b_val));
+
+//         // Шаг 2: Расчет Y, Cb, Cr для каждого пикселя
+//         int16x8_t y_acc = vmulq_s16(r, y_r);
+//         y_acc = vmlaq_s16(y_acc, g, y_g);
+//         y_acc = vmlaq_s16(y_acc, b, y_b);
+//         uint8x8_t y_val = vqmovun_s16(vshrq_n_s16(y_acc, 8));
+
+//         int16x8_t cb_acc = vmulq_s16(r, cb_r);
+//         cb_acc = vmlaq_s16(cb_acc, g, cb_g);
+//         cb_acc = vmlaq_s16(cb_acc, b, cb_b);
+//         uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
+
+//         int16x8_t cr_acc = vmulq_s16(r, cr_r);
+//         cr_acc = vmlaq_s16(cr_acc, g, cr_g);
+//         cr_acc = vmlaq_s16(cr_acc, b, cr_b);
+//         uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
+
+//         // // Шаг 3: Субдискретизация хромы (4:2:2) — попарное усреднение
+//         // uint16x4_t cb_pairs = vpaddl_u8(cb_val); // [cb0+cb1, cb2+cb3, cb4+cb5, cb6+cb7]
+//         // uint16x4_t cr_pairs = vpaddl_u8(cr_val); // [cr0+cr1, cr2+cr3, cr4+cr5, cr6+cr7]
+
+//         // // Делим на 2 и сужаем. vshrn_n_u16 возвращает uint8x8_t, 
+//         // // где нужные 4 значения лежат в младшей половине регистра.
+//         // uint8x8_t cb_down = vshrn_n_u16(vcombine_u16(cb_pairs, cb_pairs), 1); 
+//         // uint8x8_t cr_down = vshrn_n_u16(vcombine_u16(cr_pairs, cr_pairs), 1); 
+
+//         // // Шаг 4: Интерливинг хромы через vzip
+//         // // Функция vzip_u8 перемешает байты из cr_down и cb_down.
+//         // // Так как нужные данные были в младших половинах, результат их перемешивания
+//         // // окажется в chroma_zip.val[0].
+//         // uint8x8x2_t chroma_zip = vzip_u8(cr_down, cb_down);
+//         // uint8x8_t chroma_final = chroma_zip.val[0]; // [Cr01, Cb01, Cr23, Cb23, Cr45, Cb45, Cr67, Cb67]
+
+
+//         // // Шаг 5: Финальная векторная сборка макропикселей в память
+//         // uint8x8x3_t out_pack;
+//         // out_pack.val[0] = chroma_final; 
+//         // out_pack.val[1] = y_val;        
+//         // out_pack.val[2] = a_val;        
+
+//         // vst3_u8(dst, out_pack);
+//         // dst += 24; // 8 пикселей * 3 байта = 24 байта упакованных данных
+
+
+
+
+//                 // Шаг 3: Субдискретизация хромы (4:2:2) — попарное усреднение
+//         uint16x4_t cb_pairs = vpaddl_u8(cb_val); 
+//         uint16x4_t cr_pairs = vpaddl_u8(cr_val); 
+
+//         // Получаем по 4 чистых значения хромы на 8 пикселей
+//         uint8x8_t cb_down = vshrn_n_u16(vcombine_u16(cb_pairs, cb_pairs), 1); 
+//         uint8x8_t cr_down = vshrn_n_u16(vcombine_u16(cr_pairs, cr_pairs), 1); 
+
+//         // Шаг 4: Разделение Y и A на чётные и нечётные элементы
+//         // vuzp раскидает элементы: .val[0] — четные (0,2,4,6), .val[1] — нечетные (1,3,5,7)
+//         uint8x8x2_t y_split = vuzp_u8(y_val, y_val);
+//         uint8x8x2_t a_split = vuzp_u8(a_val, a_val);
+
+//         uint8x8_t y_even = y_split.val[0];
+//         uint8x8_t y_odd  = y_split.val[1];
+//         uint8x8_t a_even = a_split.val[0];
+//         uint8x8_t a_odd  = a_split.val[1];
+
+//         // Шаг 5: Сборка структуры макропикселей (6 байт на пару: Cr, Y_ev, A_ev, Cb, Y_od, A_od)
+//         // Мы используем регистры общего назначения (ARM), чтобы выгрузить 4 пары пикселей без UB
+//         // Это самый надежный способ состыковать логику с вашим приемником видео
+//         for (int p = 0; p < 4; ++p) {
+//             // Чётный пиксель (Cr / Y_even / A_even)
+//             dst[0] = cr_down[p];
+//             dst[1] = y_even[p];
+//             dst[2] = a_even[p];
+            
+//             // Нечётный пиксель (Cb / Y_odd / A_odd)
+//             dst[3] = cb_down[p];
+//             dst[4] = y_odd[p];
+//             dst[5] = a_odd[p];
+
+//             dst += 6;
+//         }
+
+//     }
+// }
+
+
+
+//anton version 27_07_18:36
+void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer) {
+    if (y < 0 || y >= img->height()) return;
+    if (width <= 0 || width > img->width() || (width % 8) != 0) return;
+
+    uint8_t * dst = buffer;
+    const uint8_t * line = img->constScanLine(y);
+    if (!line) return;
+
+    // СКОРРЕКТИРОВАННЫЕ КОЭФФИЦИЕНТЫ BT.709 (умноженные на 256)
+    int16x8_t y_r = vmovq_n_s16(54);   // 0.2126 * 256 ≈ 54
+    int16x8_t y_g = vmovq_n_s16(183);  // 0.7152 * 256 ≈ 183
+    int16x8_t y_b = vmovq_n_s16(18);   // 0.0722 * 256 ≈ 18
+    
+    int16x8_t cb_r = vmovq_n_s16(-30); // -0.1146 * 256 ≈ -30
+    int16x8_t cb_g = vmovq_n_s16(-99); // -0.3854 * 256 ≈ -99
+    int16x8_t cb_b = vmovq_n_s16(128); //  0.5000 * 256 = 128
+    
+    int16x8_t cr_r = vmovq_n_s16(128); //  0.5000 * 256 = 128
+    int16x8_t cr_g = vmovq_n_s16(-116);// -0.4542 * 256 ≈ -116
+    int16x8_t cr_b = vmovq_n_s16(-12); // -0.0458 * 256 ≈ -12
+
+    for(int x = 0; x < width; x += 8) {
+        // Шаг 1: Загрузка 8 пикселей (исправленный порядок RGBA)
+        uint8x8x4_t rgb_data = vld4_u8(line + x * 4);
+        uint8x8_t r_val = rgb_data.val[2]; 
+        uint8x8_t g_val = rgb_data.val[1]; 
+        uint8x8_t b_val = rgb_data.val[0]; 
+
+        int16x8_t r = vreinterpretq_s16_u16(vmovl_u8(r_val));
+        int16x8_t g = vreinterpretq_s16_u16(vmovl_u8(g_val));
+        int16x8_t b = vreinterpretq_s16_u16(vmovl_u8(b_val));
+
+        // Шаг 2: Расчет Y, Cb, Cr по формулам BT.709
+        int16x8_t y_acc = vmulq_s16(r, y_r);
+        y_acc = vmlaq_s16(y_acc, g, y_g);
+        y_acc = vmlaq_s16(y_acc, b, y_b);
+        uint8x8_t y_val = vqmovun_s16(vshrq_n_s16(y_acc, 8));
+
+        int16x8_t cb_acc = vmulq_s16(r, cb_r);
+        cb_acc = vmlaq_s16(cb_acc, g, cb_g);
+        cb_acc = vmlaq_s16(cb_acc, b, cb_b);
+        uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
+
+        int16x8_t cr_acc = vmulq_s16(r, cr_r);
+        cr_acc = vmlaq_s16(cr_acc, g, cr_g);
+        cr_acc = vmlaq_s16(cr_acc, b, cr_b);
+        uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
+
+        // Шаг 3: Субдискретизация хромы (4:2:2)
+        uint16x4_t cb_pairs = vpaddl_u8(cb_val); 
+        uint16x4_t cr_pairs = vpaddl_u8(cr_val); 
+
+        uint8x8_t cb_down = vshrn_n_u16(vcombine_u16(cb_pairs, cb_pairs), 1); 
+        uint8x8_t cr_down = vshrn_n_u16(vcombine_u16(cr_pairs, cr_pairs), 1); 
+
+        // Шаг 4: Разделение Y на чётные и нечётные элементы
+        uint8x8x2_t y_split = vuzp_u8(y_val, y_val);
+        uint8x8_t y_even = y_split.val[0];
+        uint8x8_t y_odd  = y_split.val[1];
+
+        // ТЕСТ: Забиваем альфу нулями (64-битный вектор из 8 элементов)
+        uint8x8_t a_test = vmov_n_u8(255);
+
+        // Шаг 5: Попиксельная сборка макропикселей
+        for (int p = 0; p < 4; ++p) {
+            // Чётный пиксель
+            dst[0] = cr_down[p];
+            dst[1] = y_even[p];
+            dst[2] = a_test[p]; // Временный тест
+            
+            // Нечётный пиксель
+            dst[3] = cb_down[p];
+            dst[4] = y_odd[p];
+            dst[5] = a_test[p]; // Временный тест
+
+            dst += 6;
         }
+    }
 }
+
+
 
 
 
@@ -1497,6 +1912,7 @@ void PbxMtvSystem::overlay_sync(int source) {
                
         }
 }*/
+
 void PbxMtvSystem::configure_image(int index, int width, int height, int x, int y, int enable)
 {
         image_config[index].width = width;

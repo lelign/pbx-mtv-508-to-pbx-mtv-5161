@@ -86,6 +86,8 @@ private:
         int overlay_fd; // Храним дескриптор открытым для максимальной скорости
         std::string log_path; // for jq
         nlohmann::json log_obj; // for jq
+        bool m_jqMode; // Флаг для хранения состояния режима jq
+        bool m_rw; // Флаг для хранения состояния режима read write str-mem disabled
 private slots:
         void slot_fps_hardware_trigger();
 private Q_SLOTS:

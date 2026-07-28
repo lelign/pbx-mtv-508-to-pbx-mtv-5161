@@ -79,6 +79,7 @@ private:
     QTimer timer_in;
     QTimer timer_out;
     int channel;
+    bool scte_Mode;    // Флаг активации расширенных логов из аргументов командной строки
 };
 
 #endif // SCTE_104_H
