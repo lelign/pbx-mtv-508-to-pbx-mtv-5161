@@ -88,6 +88,7 @@ private:
         nlohmann::json log_obj; // for jq
         bool m_jqMode; // Флаг для хранения состояния режима jq
         bool m_rw; // Флаг для хранения состояния режима read write str-mem disabled
+        int current_buffer_index;
 private slots:
         void slot_fps_hardware_trigger();
 private Q_SLOTS:
