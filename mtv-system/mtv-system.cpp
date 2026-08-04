@@ -2385,7 +2385,7 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
     // 1. Calculate next write buffer index using the class variable
     int next_write_index = (this->current_buffer_index == 0) ? 1 : 0;
     uint8_t* start_address = reinterpret_cast<uint8_t*>(buffer + (next_write_index * (video_size / 2)));
-    qDebug(category) << start_address << hex;
+//     qDebug(category) << start_address << hex;
 
     // 2. Render loop using ARM-NEON convert_line
     for (int y = 0; y < image->height(); ++y) {

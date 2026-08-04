@@ -323,6 +323,10 @@ private:
     void emit_signal_solo(solo_mode_t solo_mode);
     QImage fast_scale(QImage image, int width, int height);
 
+    QImage full_overlay_frame;   // общий кадр 1920x1080, накапливает все элементы
+    void blit_to_frame(QImage *image, int x, int y);
+    void flush_overlay();
+
 signals:
     void signal_solo(solo_mode_t solo_mode);
     void signal_preset(int preset_number);

@@ -103,6 +103,9 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
 
     time_counter.text = "00:00:00";
 
+    full_overlay_frame = QImage(1920, 1080, QImage::Format_ARGB32);
+    full_overlay_frame.fill(0x00000000); // изначально всё прозрачно
+
 }
 
 Layout::~Layout()
@@ -558,7 +561,7 @@ int x, y;
     else
         draw_transparant_text_panel(image_label_panel, panel, FONT_CHANNEL_NAME_SIZE, Qt::AlignCenter, label);
 
-    mtvsystem->draw_overlay(&image_label_panel, x, y);
+    blit_to_frame(&image_label_panel, x, y);
 }
 
 void Layout::update_sdi_format(int index)
@@ -580,7 +583,24 @@ void Layout::update_sdi_format(int index)
     int x =layout_object[k].screen_plan.panel_format_video.x();
     int y =layout_object[k].screen_plan.panel_format_video.y();
 
-    mtvsystem->draw_overlay(&image_sdi_panel, x, y);
+    blit_to_frame(&image_sdi_panel, x, y);
+}
+
+void Layout::flush_overlay()
+{
+    mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);
+}
+
+void Layout::blit_to_frame(QImage *image, int x, int y)
+{
+    QPainter painter(&full_overlay_frame);
+    // Source, а не SourceOver: полностью ЗАМЕЩАЕТ пиксели и альфа-канал в этом
+    // прямоугольнике, включая обнуление альфы там, где рисуемая картинка прозрачна.
+    // Это и есть механизм "очистки" старого содержимого региона.
+    painter.setCompositionMode(QPainter::CompositionMode_Source);
+    painter.drawImage(x, y, *image);
+
+    flush_overlay();
 }
 
 void Layout::draw_overlay()
@@ -618,11 +638,11 @@ qDebug(category) << "The get_layout_3x3 operation took" << timer.elapsed() << "m
 
     
    
-    mtvsystem->draw_overlay(&layout_border);
+    blit_to_frame(&layout_border, 0, 0);
 
     mtvsystem->overlay_sync();
 
-qDebug(category) << "The draw_overlay operation took" << timer.elapsed() << "milliseconds";
+qDebug(category) << "The blit_to_frame operation took" << timer.elapsed() << "milliseconds";
 
     scte_104_update();
 slot_draw_time_counter(time_counter.text);
@@ -1575,7 +1595,7 @@ void Layout::draw_time_counter(label_t label)
     painter.drawText(time_counter_rec, Qt::AlignCenter, label.text);
     painter.end();
 
-    mtvsystem->draw_overlay(&image_time_counter, label.size.x(), label.size.y());
+    blit_to_frame(&image_time_counter, label.size.x(), label.size.y());
     mtvsystem->overlay_sync();
 }
 
@@ -1602,7 +1622,7 @@ QString date_str;
 
     painter.drawText(clock_rec, Qt::AlignCenter, digital_clock_str);
     painter.end();
-    mtvsystem->draw_overlay(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
+    blit_to_frame(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
 
     QRect date_rec = digital_clock.date_rec;
     date_rec.moveTo(0,0);
@@ -1624,7 +1644,7 @@ QString date_str;
         date_str = date.toString("d MMMM yyyy");
 
     painter_date.drawText(date_rec, Qt::AlignCenter, date_str);
-    mtvsystem->draw_overlay(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
+    blit_to_frame(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
 
     mtvsystem->overlay_sync();
 }
@@ -1681,7 +1701,7 @@ QSvgRenderer m_second_hand(QString(":/image/clock/second_hand.svg"));
 
     painter.end();
 
-    mtvsystem->draw_overlay(&image_clock, clock_rec.x(),  clock_rec.y());
+    blit_to_frame(&image_clock, clock_rec.x(),  clock_rec.y());
     int source = 1;
     mtvsystem->overlay_sync(source);
 }
@@ -1767,7 +1787,7 @@ void Layout::clear_TALLY_indicator(layout_object_t layout_object)
 
     QImage image_clear(clear_rec.width(), clear_rec.height(),  QImage::Format_ARGB32);
     image_clear.fill(0);
-    mtvsystem->draw_overlay(&image_clear, clear_rec.x(),  clear_rec.y());
+    blit_to_frame(&image_clear, clear_rec.x(),  clear_rec.y());
     mtvsystem->overlay_sync();
 }
 
@@ -1779,7 +1799,7 @@ void Layout::draw_TALLY_indicator_old_style(QRect cell, QColor color)
     QRect tally_cell = QRect(0, 0, cell.width(), cell.height());
     get_image_TALLY_indicator_old_style(image_tally, tally_cell, color);
 
-    mtvsystem->draw_overlay(&image_tally, cell.x(), cell.y());
+    blit_to_frame(&image_tally, cell.x(), cell.y());
     mtvsystem->overlay_sync();
 }
 
@@ -1852,7 +1872,7 @@ QColor color;
         painter_tally.end();
     }
 
-    mtvsystem->draw_overlay(&image_tally, tally_rec.x(), tally_rec.y());
+    blit_to_frame(&image_tally, tally_rec.x(), tally_rec.y());
     mtvsystem->overlay_sync();
 }
 
@@ -2096,7 +2116,7 @@ void Layout::clear_alarm(layout_object_t layout_object)
 
     QImage image_clear(clear_rec.width(), clear_rec.height(),  QImage::Format_ARGB32);
     image_clear.fill(0);
-    mtvsystem->draw_overlay(&image_clear, clear_rec.x(),  clear_rec.y());
+    blit_to_frame(&image_clear, clear_rec.x(),  clear_rec.y());
 
     display_scte_104(layout_object.cell.input &0x07); // Обновить метку 104 т.к. на окнах малого размера clear_alarm затирает часть метки
 }
@@ -2164,7 +2184,7 @@ void Layout::draw_alarm_label(int index, layout_object_t layout_object)
 
         painter_alarm.setPen(QPen(Qt::white));
         painter_alarm.drawText(alarm_rec, Qt::AlignCenter, alarm_label.at(i).text + elapsed_str);
-        mtvsystem->draw_overlay(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
+        blit_to_frame(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
         alarm_label_rec.translate(0, offset_h);
     }
 }
@@ -2264,7 +2284,7 @@ void Layout::clean_teletext_image(int channel)
     int x = panel.x();
     int y = panel.y();
 
-    mtvsystem->draw_overlay(&image_teletext, x, y);
+    blit_to_frame(&image_teletext, x, y);
 }
 
 
@@ -2281,7 +2301,7 @@ void Layout::display_teletext(QImage image_teletext)
     int x = panel.x();
     int y = panel.y();
 
-    mtvsystem->draw_overlay(&image, x, y);
+    blit_to_frame(&image, x, y);
     mtvsystem->overlay_sync();
 }
 
@@ -2375,7 +2395,7 @@ void Layout::display_scte_104(int index)
     int x = panel.x();
     int y = panel.y();
 
-    mtvsystem->draw_overlay(&image_scte_104, x, y);
+    blit_to_frame(&image_scte_104, x, y);
 }
 
 
@@ -2414,7 +2434,7 @@ void Layout::display_op47_icons(int cell_index)
     int x =panel.x();
     int y =panel.y();
 
-    mtvsystem->draw_overlay(&image_text_icons, x, y);
+    blit_to_frame(&image_text_icons, x, y);
 }
 
 
