@@ -1,4 +1,5 @@
 #include "layout.h"
+#include <unistd.h>
 #include <QLoggingCategory>
 #include <QSvgRenderer>
 #include <QLocale>
@@ -246,6 +247,9 @@ void Layout::slot_qpps()
         draw_analog_clock();
 
     draw_alarm_elapsed();
+
+    qDebug(category) << "slot_qpps";
+    flush_overlay();
 }
 
 
@@ -260,6 +264,8 @@ static int common_alarm_old = -1;
         check_freeze(i_cell);
         check_video_loss(i_cell);
     }
+
+    flush_overlay();
 
     int common_alarm = get_common_alarm();
     gpio->set_common_alarm(common_alarm);
@@ -562,6 +568,7 @@ int x, y;
         draw_transparant_text_panel(image_label_panel, panel, FONT_CHANNEL_NAME_SIZE, Qt::AlignCenter, label);
 
     blit_to_frame(&image_label_panel, x, y);
+    flush_overlay();
 }
 
 void Layout::update_sdi_format(int index)
@@ -588,7 +595,14 @@ void Layout::update_sdi_format(int index)
 
 void Layout::flush_overlay()
 {
+    // system("devmem2 0xFF200004 w 0");
+    // usleep(300); 
+    QElapsedTimer timer;
+    timer.start();  
     mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);
+    qDebug(category) << "mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);" << timer.elapsed() << "milliseconds";
+    // system("devmem2 0xFF200004 w 1");  
+    qDebug(category) << "flush_overlay";
 }
 
 void Layout::blit_to_frame(QImage *image, int x, int y)
@@ -599,8 +613,6 @@ void Layout::blit_to_frame(QImage *image, int x, int y)
     // Это и есть механизм "очистки" старого содержимого региона.
     painter.setCompositionMode(QPainter::CompositionMode_Source);
     painter.drawImage(x, y, *image);
-
-    flush_overlay();
 }
 
 void Layout::draw_overlay()
@@ -640,19 +652,23 @@ qDebug(category) << "The get_layout_3x3 operation took" << timer.elapsed() << "m
    
     blit_to_frame(&layout_border, 0, 0);
 
-    mtvsystem->overlay_sync();
+    // mtvsystem->overlay_sync();
 
 qDebug(category) << "The blit_to_frame operation took" << timer.elapsed() << "milliseconds";
 
     scte_104_update();
-slot_draw_time_counter(time_counter.text);
+    slot_draw_time_counter(time_counter.text);
+
+    flush_overlay();
 }
 
 void Layout::draw_overlay_test_file()
 {
     QImage overlay_test_file("layout.png");
-    mtvsystem->draw_overlay(&overlay_test_file);
-    mtvsystem->overlay_sync();
+    blit_to_frame(&overlay_test_file, 0, 0);
+    flush_overlay();
+    // mtvsystem->draw_overlay(&overlay_test_file);
+    // mtvsystem->overlay_sync();
 }
 
 void Layout::set_aspect_ratio(QRect &rec, int index)
@@ -840,7 +856,7 @@ static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
             if(i == 7) cascade_mode_update(); // чтобы не дёргался вход 8
         }
     }
-    mtvsystem->overlay_sync();
+    flush_overlay();
 }
 
 
@@ -1742,7 +1758,9 @@ void Layout::slot_TALLY(int input, int state)
     if(layout_object[k].cell.style)
         draw_TALLY_indicator_old_style(state, layout_object[k]);
     else
-        draw_TALLY_indicator(state, layout_object[k]);   
+        draw_TALLY_indicator(state, layout_object[k]);
+        
+    flush_overlay();
 }
 
 void Layout::draw_TALLY_indicator_old_style(int state, const layout_object_t &layout_object)
@@ -2302,7 +2320,8 @@ void Layout::display_teletext(QImage image_teletext)
     int y = panel.y();
 
     blit_to_frame(&image, x, y);
-    mtvsystem->overlay_sync();
+    flush_overlay();
+    // mtvsystem->overlay_sync();
 }
 
 
@@ -2350,6 +2369,7 @@ static int op47_old[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         }
     }
 
+    flush_overlay();
 }
 
 
@@ -2449,5 +2469,6 @@ void Layout::slot_splice(int index, QString text_in, QString text_out)
     scte_104_splice[index].in  = text_in;
     scte_104_splice[index].out = text_out;
     display_scte_104(index);
+    flush_overlay();
 }
 

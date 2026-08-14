@@ -32,7 +32,8 @@ public:
         image_config_t image_config[8];
 
         void draw_overlay(QImage * image);
-        void draw_overlay(QImage * image, int offset_x, int offset_y);
+        // void draw_overlay(QImage * image, int offset_x, int offset_y);
+        void draw_overlay (QImage *img, int x_offset, int y_offset);
         void overlay_sync();
         void overlay_sync(int source);
         void configure_image(int index, int width, int height, int x, int y, int enable);
