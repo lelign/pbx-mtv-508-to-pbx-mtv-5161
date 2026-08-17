@@ -13,6 +13,7 @@
 #include <QFontMetrics>
 #include <QJsonObject>
 #include <QJsonDocument>
+#include <QSvgRenderer>
 
 #include "../mtv-system/mtv-system.h"
 //#include "../m26/mb86m26_control.h"
@@ -252,6 +253,12 @@ private:
     QImage *image_clock;
     QTimer timer_update_alarm;
     QTimer timer_update_op47;
+    QTimer timer_analog_clock;      // для плавного хода секундной стрелки (чаще 1 раза в секунду)
+
+    QSvgRenderer m_clock_face;
+    QSvgRenderer m_hour_hand;
+    QSvgRenderer m_minute_hand;
+    QSvgRenderer m_second_hand;
 
     PbxMtvSystem    *mtvsystem;
     //mb86m26_control *m26_control;
@@ -353,6 +360,7 @@ public slots:
     void slot_cascade_device_data_receive(int index, QByteArray data);
     void slot_TALLY(int input, int state);
     void slot_draw_time_counter(QString time_counter_str);
+    void slot_draw_analog_clock_tick();
 };
 
 #endif // LAYOUT_H

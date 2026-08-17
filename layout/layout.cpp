@@ -71,6 +71,15 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     connect(gpio, &Gpio::signal_time_count_start, timer_time_counter, &Time_counter::slot_start);
     connect(gpio, &Gpio::signal_time_count_stop,  timer_time_counter, &Time_counter::slot_stop);
 
+    // SVG часовых стрелок грузим один раз, а не при каждой отрисовке
+    m_clock_face.load(QString(":/image/clock/face.svg"));
+    m_hour_hand.load(QString(":/image/clock/hour_hand.svg"));
+    m_minute_hand.load(QString(":/image/clock/minute_hand.svg"));
+    m_second_hand.load(QString(":/image/clock/second_hand.svg"));
+
+    timer_analog_clock.start(100); // 10 Гц — достаточно, чтобы секундная стрелка выглядела "скользящей"
+    connect(&timer_analog_clock, &QTimer::timeout, this, &Layout::slot_draw_analog_clock_tick);
+
     ini_alarm_time_threshold();
     hdmi_color = 1;
 
@@ -243,8 +252,8 @@ void Layout::slot_qpps()
 {
     if(clock_cell.style)
         draw_digital_clock();
-    else
-        draw_analog_clock();
+    // аналоговые часы теперь перерисовываются отдельным таймером timer_analog_clock
+    // (см. slot_draw_analog_clock_tick), чтобы секундная стрелка двигалась плавно
 
     draw_alarm_elapsed();
 
@@ -1665,13 +1674,16 @@ QString date_str;
     mtvsystem->overlay_sync();
 }
 
+void Layout::slot_draw_analog_clock_tick()
+{
+    // Пока выбран стиль "аналоговые часы" - перерисовываем чаще 1 раза в секунду,
+    // чтобы секундная стрелка двигалась плавно, а не "прыжками".
+    if(!clock_cell.style)
+        draw_analog_clock();
+}
+
 void Layout::draw_analog_clock()
 {
-QSvgRenderer m_clock_face (QString(":/image/clock/face.svg"));
-QSvgRenderer m_hour_hand  (QString(":/image/clock/hour_hand.svg"));
-QSvgRenderer m_minute_hand(QString(":/image/clock/minute_hand.svg"));
-QSvgRenderer m_second_hand(QString(":/image/clock/second_hand.svg"));
-
     if(!clock_cell.enable) return;
     if(solo_mode.enable)   return;
 
@@ -1686,6 +1698,8 @@ QSvgRenderer m_second_hand(QString(":/image/clock/second_hand.svg"));
     QPainter painter(&image_clock);
 
     QTime time = QTime::currentTime();
+    // Дробные секунды (с учётом миллисекунд) - на них и держится плавность хода стрелки
+    double sec_frac = time.second() + time.msec() / 1000.0;
 
     // Draw the clock face
     m_clock_face.render(&painter);
@@ -1702,7 +1716,7 @@ QSvgRenderer m_second_hand(QString(":/image/clock/second_hand.svg"));
 
     // Draw the minute hand
     painter.translate(image_clock.width() / 2,image_clock.height() / 2);
-    painter.rotate(6.0 * (time.minute() + time.second() / 60.0));
+    painter.rotate(6.0 * (time.minute() + sec_frac / 60.0));
     painter.translate(-image_clock.width() / 2, -image_clock.height() / 2);
     m_minute_hand.render(&painter);
     painter.restore();
@@ -1710,7 +1724,7 @@ QSvgRenderer m_second_hand(QString(":/image/clock/second_hand.svg"));
 
     // Draw the second hand
     painter.translate(image_clock.width() / 2, image_clock.height() / 2);
-    painter.rotate(6.0 *time.second());
+    painter.rotate(6.0 * sec_frac);
     painter.translate(-image_clock.width() / 2, -image_clock.height() / 2);
     m_second_hand.render(&painter);
     painter.restore();
@@ -1719,6 +1733,7 @@ QSvgRenderer m_second_hand(QString(":/image/clock/second_hand.svg"));
 
     blit_to_frame(&image_clock, clock_rec.x(),  clock_rec.y());
     int source = 1;
+    flush_overlay();
     mtvsystem->overlay_sync(source);
 }
 
@@ -2471,4 +2486,3 @@ void Layout::slot_splice(int index, QString text_in, QString text_out)
     display_scte_104(index);
     flush_overlay();
 }
-
