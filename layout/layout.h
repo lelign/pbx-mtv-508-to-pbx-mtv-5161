@@ -13,6 +13,7 @@
 #include <QFontMetrics>
 #include <QJsonObject>
 #include <QJsonDocument>
+#include <QSvgRenderer>
 
 #include "../mtv-system/mtv-system.h"
 //#include "../m26/mb86m26_control.h"
@@ -252,6 +253,10 @@ private:
     QImage *image_clock;
     QTimer timer_update_alarm;
     QTimer timer_update_op47;
+    QTimer timer_analog_clock;      // для плавного хода секундной стрелки (чаще 1 раза в секунду)
+
+    QSvgRenderer m_clock_face;
+    QImage       m_clock_face_cache;   // циферблат не меняется - рендерим SVG один раз, дальше просто копируем
 
     PbxMtvSystem    *mtvsystem;
     //mb86m26_control *m26_control;
@@ -323,6 +328,10 @@ private:
     void emit_signal_solo(solo_mode_t solo_mode);
     QImage fast_scale(QImage image, int width, int height);
 
+    QImage full_overlay_frame;   // общий кадр 1920x1080, накапливает все элементы
+    void blit_to_frame(QImage *image, int x, int y);
+    void flush_overlay();
+
 signals:
     void signal_solo(solo_mode_t solo_mode);
     void signal_preset(int preset_number);
@@ -349,6 +358,7 @@ public slots:
     void slot_cascade_device_data_receive(int index, QByteArray data);
     void slot_TALLY(int input, int state);
     void slot_draw_time_counter(QString time_counter_str);
+    void slot_draw_analog_clock_tick();
 };
 
 #endif // LAYOUT_H

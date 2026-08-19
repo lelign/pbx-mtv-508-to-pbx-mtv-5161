@@ -123,8 +123,8 @@ add_executable(rgbyuv-test rgbyuv-test/rgbyuv-test.cpp)
 target_link_libraries(rgbyuv-test PRIVATE Qt5::Widgets)
 
 # --- Исполняемый файл 2: qt-apt ---
-add_executable(qt-app qt-app/qt-app.cpp)
-target_link_libraries(qt-app PRIVATE Qt5::Widgets)
+#add_executable(qt-app qt-app/qt-app.cpp)
+#target_link_libraries(qt-app PRIVATE Qt5::Widgets)
 
 # --- Исполняемый файл 3: read_mem ---
 # add_executable(read_mem read_mem/read_mem.cpp)

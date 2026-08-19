@@ -1,4 +1,5 @@
 #include "layout.h"
+#include <unistd.h>
 #include <QLoggingCategory>
 #include <QSvgRenderer>
 #include <QLocale>
@@ -69,6 +70,13 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     connect(timer_time_counter, &Time_counter::signal_time_counter_update, this, &Layout::slot_draw_time_counter);
     connect(gpio, &Gpio::signal_time_count_start, timer_time_counter, &Time_counter::slot_start);
     connect(gpio, &Gpio::signal_time_count_stop,  timer_time_counter, &Time_counter::slot_stop);
+    emit gpio->signal_time_count_start();
+
+    // SVG циферблата грузим один раз; сами стрелки теперь рисуются вручную (см. draw_analog_clock)
+    m_clock_face.load(QString(":/image/clock/face.svg"));
+
+    timer_analog_clock.start(50); // 10 (20) Гц — достаточно, чтобы секундная стрелка выглядела "скользящей"
+    connect(&timer_analog_clock, &QTimer::timeout, this, &Layout::slot_draw_analog_clock_tick);
 
     ini_alarm_time_threshold();
     hdmi_color = 1;
@@ -102,6 +110,9 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     image_teletext = image_teletext.scaled(QSize(46, 46));
 
     time_counter.text = "00:00:00";
+
+    full_overlay_frame = QImage(1920, 1080, QImage::Format_ARGB32);
+    full_overlay_frame.fill(0x00000000); // изначально всё прозрачно
 
 }
 
@@ -239,10 +250,13 @@ void Layout::slot_qpps()
 {
     if(clock_cell.style)
         draw_digital_clock();
-    else
-        draw_analog_clock();
+    // аналоговые часы теперь перерисовываются отдельным таймером timer_analog_clock
+    // (см. slot_draw_analog_clock_tick), чтобы секундная стрелка двигалась плавно
 
     draw_alarm_elapsed();
+
+    // qDebug(category) << "slot_qpps";
+    // flush_overlay();
 }
 
 
@@ -257,6 +271,8 @@ static int common_alarm_old = -1;
         check_freeze(i_cell);
         check_video_loss(i_cell);
     }
+
+    // flush_overlay();
 
     int common_alarm = get_common_alarm();
     gpio->set_common_alarm(common_alarm);
@@ -558,7 +574,10 @@ int x, y;
     else
         draw_transparant_text_panel(image_label_panel, panel, FONT_CHANNEL_NAME_SIZE, Qt::AlignCenter, label);
 
-    mtvsystem->draw_overlay(&image_label_panel, x, y);
+    blit_to_frame(&image_label_panel, x, y);
+    qDebug() << "update_label_name_channel";
+    // flush_overlay();
+    mtvsystem->draw_overlay_fast(&image_label_panel, x, y);
 }
 
 void Layout::update_sdi_format(int index)
@@ -580,7 +599,30 @@ void Layout::update_sdi_format(int index)
     int x =layout_object[k].screen_plan.panel_format_video.x();
     int y =layout_object[k].screen_plan.panel_format_video.y();
 
-    mtvsystem->draw_overlay(&image_sdi_panel, x, y);
+    blit_to_frame(&image_sdi_panel, x, y);
+    mtvsystem->draw_overlay_fast(&image_sdi_panel, x, y);
+}
+
+void Layout::flush_overlay()
+{
+    // system("devmem2 0xFF200004 w 0");
+    // usleep(300); 
+    QElapsedTimer timer;
+    timer.start();  
+    mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);
+    qDebug(category) << "mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);" << timer.elapsed() << "milliseconds";
+    // system("devmem2 0xFF200004 w 1");  
+    qDebug(category) << "flush_overlay";
+}
+
+void Layout::blit_to_frame(QImage *image, int x, int y)
+{
+    QPainter painter(&full_overlay_frame);
+    // Source, а не SourceOver: полностью ЗАМЕЩАЕТ пиксели и альфа-канал в этом
+    // прямоугольнике, включая обнуление альфы там, где рисуемая картинка прозрачна.
+    // Это и есть механизм "очистки" старого содержимого региона.
+    painter.setCompositionMode(QPainter::CompositionMode_Source);
+    painter.drawImage(x, y, *image);
 }
 
 void Layout::draw_overlay()
@@ -606,33 +648,41 @@ static int output_format_old = -1;
         output_format_old = output_format;
     }
 
-QElapsedTimer timer;
-timer.start();
-qDebug(category) << "====== Start Measuring ==========";
-    if(solo_mode.enable)
-        layout_border = get_layout_1x1(solo_mode.input);
-    else
-        layout_border = get_layout();
+    QElapsedTimer timer;
+    timer.start();
+    qDebug(category) << "====== Start Measuring ==========";
+        if(solo_mode.enable)
+            layout_border = get_layout_1x1(solo_mode.input);
+        else
+            layout_border = get_layout();
 
-qDebug(category) << "The get_layout_3x3 operation took" << timer.elapsed() << "milliseconds";
+    qDebug(category) << "The get_layout_3x3 operation took" << timer.elapsed() << "milliseconds";
 
+        
     
-   
-    mtvsystem->draw_overlay(&layout_border);
+    blit_to_frame(&layout_border, 0, 0);
 
-    mtvsystem->overlay_sync();
-
-qDebug(category) << "The draw_overlay operation took" << timer.elapsed() << "milliseconds";
+    qDebug(category) << "The blit_to_frame operation took" << timer.elapsed() << "milliseconds";
 
     scte_104_update();
-slot_draw_time_counter(time_counter.text);
+    slot_draw_time_counter(time_counter.text);
+
+    qDebug() << "draw_overlay";
+    // Это единственное место, где пересобирается ВЕСЬ экран целиком (не точечный
+    // патч) - тут двойная буферизация оправдана: собираем полную картинку в
+    // full_overlay_frame -> draw_overlay() пишет её в НЕАКТИВНЫЙ буфер -> flip.
+    // Так зритель не видит, как раскладка перестраивается "по кускам" вживую.
+    flush_overlay();
 }
 
 void Layout::draw_overlay_test_file()
 {
     QImage overlay_test_file("layout.png");
-    mtvsystem->draw_overlay(&overlay_test_file);
-    mtvsystem->overlay_sync();
+    blit_to_frame(&overlay_test_file, 0, 0);
+    qDebug() << "draw_overlay_test_file";
+    flush_overlay();
+    // mtvsystem->draw_overlay(&overlay_test_file);
+    // mtvsystem->overlay_sync();
 }
 
 void Layout::set_aspect_ratio(QRect &rec, int index)
@@ -820,7 +870,8 @@ static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
             if(i == 7) cascade_mode_update(); // чтобы не дёргался вход 8
         }
     }
-    mtvsystem->overlay_sync();
+    qDebug() << "routing_source_video";
+    // flush_overlay();
 }
 
 
@@ -1575,8 +1626,10 @@ void Layout::draw_time_counter(label_t label)
     painter.drawText(time_counter_rec, Qt::AlignCenter, label.text);
     painter.end();
 
-    mtvsystem->draw_overlay(&image_time_counter, label.size.x(), label.size.y());
-    mtvsystem->overlay_sync();
+    blit_to_frame(&image_time_counter, label.size.x(), label.size.y());
+    // Быстрый путь: сразу в активный HW-буфер, не дожидаясь раз-в-секунду flush_overlay().
+    // Это и нужно, чтобы десятые доли секунды реально обновлялись на экране 10 раз/сек.
+    mtvsystem->draw_overlay_fast(&image_time_counter, label.size.x(), label.size.y());
 }
 
 void Layout::draw_digital_clock()
@@ -1602,7 +1655,7 @@ QString date_str;
 
     painter.drawText(clock_rec, Qt::AlignCenter, digital_clock_str);
     painter.end();
-    mtvsystem->draw_overlay(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
+    blit_to_frame(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
 
     QRect date_rec = digital_clock.date_rec;
     date_rec.moveTo(0,0);
@@ -1624,66 +1677,103 @@ QString date_str;
         date_str = date.toString("d MMMM yyyy");
 
     painter_date.drawText(date_rec, Qt::AlignCenter, date_str);
-    mtvsystem->draw_overlay(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
+    blit_to_frame(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
+    mtvsystem->draw_overlay_fast(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
 
     mtvsystem->overlay_sync();
 }
 
+void Layout::slot_draw_analog_clock_tick()
+{
+    // Пока выбран стиль "аналоговые часы" - перерисовываем чаще 1 раза в секунду,
+    // чтобы секундная стрелка двигалась плавно, а не "прыжками".
+    if(!clock_cell.style)
+        draw_analog_clock();
+}
+
 void Layout::draw_analog_clock()
 {
-QSvgRenderer m_clock_face (QString(":/image/clock/face.svg"));
-QSvgRenderer m_hour_hand  (QString(":/image/clock/hour_hand.svg"));
-QSvgRenderer m_minute_hand(QString(":/image/clock/minute_hand.svg"));
-QSvgRenderer m_second_hand(QString(":/image/clock/second_hand.svg"));
-
     if(!clock_cell.enable) return;
     if(solo_mode.enable)   return;
 
-    QRect clock_rec =analog_clock.clock_size;
+    QRect clock_rec = analog_clock.clock_size;
     int side = qMin(clock_rec.width(), clock_rec.height());
     side &= ~0x07;
     clock_rec.translate((analog_clock.cell.width() - side)/2, 0);
 
-    QImage image_clock(side, side, QImage::Format_ARGB32);
-    image_clock.fill(0x00000000);  // partly transparent background
+    // Циферблат (риски/цифры) не меняется от тика к тику - рендерим SVG только
+    // при первом вызове или если поменялся размер (сменилась раскладка), а не
+    // на каждый вызов таймера. Дальше просто копируем готовую картинку (Qt
+    // copy-on-write - это дёшево, реальное копирование произойдёт только когда
+    // мы начнём рисовать поверх).
+    if(m_clock_face_cache.width() != side) {
+        m_clock_face_cache = QImage(side, side, QImage::Format_ARGB32);
+        m_clock_face_cache.fill(0x00000000);
+        QPainter face_painter(&m_clock_face_cache);
+        face_painter.setRenderHint(QPainter::Antialiasing);
+        m_clock_face.render(&face_painter);
+        face_painter.end();
+    }
+
+    QImage image_clock = m_clock_face_cache;
 
     QPainter painter(&image_clock);
+    painter.setRenderHint(QPainter::Antialiasing);
 
     QTime time = QTime::currentTime();
+    // Дробные секунды (с учётом миллисекунд) - на них и держится плавность хода стрелки
+    double sec_frac = time.second() + time.msec() / 1000.0;
 
-    // Draw the clock face
-    m_clock_face.render(&painter);
-    painter.save();
+    double cx = image_clock.width()  / 2.0;
+    double cy = image_clock.height() / 2.0;
+    double r  = image_clock.width()  / 2.0;
 
-    // Draw the hour hand
-    painter.translate(image_clock.width() / 2, image_clock.height() / 2);
-    painter.rotate(30.0 * (time.hour() + time.minute() / 60.0));
+    // Рисуем стрелку как заострённый к концу многоугольник вместо SVG-рендера:
+    // быстрее (нет разбора векторного документа) и даёт полный контроль над формой.
+    auto draw_hand = [&](double angle_deg, double length_ratio, double width, const QColor &color, double tail_ratio)
+    {
+        painter.save();
+        painter.translate(cx, cy);
+        painter.rotate(angle_deg);
 
-    painter.translate(-image_clock.width() / 2, -image_clock.height() / 2);
-    m_hour_hand.render(&painter);
-    painter.restore();
-    painter.save();
+        double len  = r * length_ratio;
+        double tail = r * tail_ratio;
 
-    // Draw the minute hand
-    painter.translate(image_clock.width() / 2,image_clock.height() / 2);
-    painter.rotate(6.0 * (time.minute() + time.second() / 60.0));
-    painter.translate(-image_clock.width() / 2, -image_clock.height() / 2);
-    m_minute_hand.render(&painter);
-    painter.restore();
-    painter.save();
+        QPainterPath path;
+        path.moveTo(-width / 2.0, tail);
+        path.lineTo(-width / 4.0, -len + width);
+        path.lineTo(0,            -len);
+        path.lineTo( width / 4.0, -len + width);
+        path.lineTo( width / 2.0, tail);
+        path.closeSubpath();
 
-    // Draw the second hand
-    painter.translate(image_clock.width() / 2, image_clock.height() / 2);
-    painter.rotate(6.0 *time.second());
-    painter.translate(-image_clock.width() / 2, -image_clock.height() / 2);
-    m_second_hand.render(&painter);
-    painter.restore();
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(color);
+        painter.drawPath(path);
+        painter.restore();
+    };
+
+    const QColor hand_color(30, 30, 30);
+    const QColor second_hand_color(190, 30, 30);
+
+    // Часовая - короткая и толстая
+    draw_hand(30.0 * ((time.hour() % 12) + time.minute() / 60.0), 0.50, r * 0.07, hand_color, 0.0);
+    // Минутная - длиннее и тоньше
+    draw_hand(6.0  * (time.minute() + sec_frac / 60.0),           0.75, r * 0.04, hand_color, 0.0);
+    // Секундная - тонкая, с небольшим "противовесом"-хвостиком, как у настоящих часов
+    draw_hand(6.0 * sec_frac,                                     0.85, r * 0.025, second_hand_color, 0.15);
+
+    // Ось в центре
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(second_hand_color);
+    painter.drawEllipse(QPointF(cx, cy), r * 0.025, r * 0.025);
 
     painter.end();
 
-    mtvsystem->draw_overlay(&image_clock, clock_rec.x(),  clock_rec.y());
-    int source = 1;
-    mtvsystem->overlay_sync(source);
+    blit_to_frame(&image_clock, clock_rec.x(),  clock_rec.y());
+    // Быстрый путь: сразу в активный HW-буфер (без flip) - FPGA подхватит
+    // изменение стрелок в пределах ~16мс благодаря slot_fps_hardware_trigger().
+    mtvsystem->draw_overlay_fast(&image_clock, clock_rec.x(), clock_rec.y());
 }
 
 
@@ -1722,7 +1812,10 @@ void Layout::slot_TALLY(int input, int state)
     if(layout_object[k].cell.style)
         draw_TALLY_indicator_old_style(state, layout_object[k]);
     else
-        draw_TALLY_indicator(state, layout_object[k]);   
+        draw_TALLY_indicator(state, layout_object[k]);
+    
+    qDebug() << "slot_TALLY";
+    // flush_overlay();
 }
 
 void Layout::draw_TALLY_indicator_old_style(int state, const layout_object_t &layout_object)
@@ -1767,7 +1860,7 @@ void Layout::clear_TALLY_indicator(layout_object_t layout_object)
 
     QImage image_clear(clear_rec.width(), clear_rec.height(),  QImage::Format_ARGB32);
     image_clear.fill(0);
-    mtvsystem->draw_overlay(&image_clear, clear_rec.x(),  clear_rec.y());
+    blit_to_frame(&image_clear, clear_rec.x(),  clear_rec.y());
     mtvsystem->overlay_sync();
 }
 
@@ -1779,7 +1872,8 @@ void Layout::draw_TALLY_indicator_old_style(QRect cell, QColor color)
     QRect tally_cell = QRect(0, 0, cell.width(), cell.height());
     get_image_TALLY_indicator_old_style(image_tally, tally_cell, color);
 
-    mtvsystem->draw_overlay(&image_tally, cell.x(), cell.y());
+    blit_to_frame(&image_tally, cell.x(), cell.y());
+    mtvsystem->draw_overlay_fast(&image_tally, cell.x(), cell.y());
     mtvsystem->overlay_sync();
 }
 
@@ -1852,7 +1946,8 @@ QColor color;
         painter_tally.end();
     }
 
-    mtvsystem->draw_overlay(&image_tally, tally_rec.x(), tally_rec.y());
+    blit_to_frame(&image_tally, tally_rec.x(), tally_rec.y());
+    mtvsystem->draw_overlay_fast(&image_tally, tally_rec.x(), tally_rec.y());
     mtvsystem->overlay_sync();
 }
 
@@ -2096,7 +2191,7 @@ void Layout::clear_alarm(layout_object_t layout_object)
 
     QImage image_clear(clear_rec.width(), clear_rec.height(),  QImage::Format_ARGB32);
     image_clear.fill(0);
-    mtvsystem->draw_overlay(&image_clear, clear_rec.x(),  clear_rec.y());
+    blit_to_frame(&image_clear, clear_rec.x(),  clear_rec.y());
 
     display_scte_104(layout_object.cell.input &0x07); // Обновить метку 104 т.к. на окнах малого размера clear_alarm затирает часть метки
 }
@@ -2164,7 +2259,8 @@ void Layout::draw_alarm_label(int index, layout_object_t layout_object)
 
         painter_alarm.setPen(QPen(Qt::white));
         painter_alarm.drawText(alarm_rec, Qt::AlignCenter, alarm_label.at(i).text + elapsed_str);
-        mtvsystem->draw_overlay(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
+        blit_to_frame(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
+        mtvsystem->draw_overlay_fast(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
         alarm_label_rec.translate(0, offset_h);
     }
 }
@@ -2264,7 +2360,8 @@ void Layout::clean_teletext_image(int channel)
     int x = panel.x();
     int y = panel.y();
 
-    mtvsystem->draw_overlay(&image_teletext, x, y);
+    blit_to_frame(&image_teletext, x, y);
+    mtvsystem->draw_overlay_fast(&image_teletext, x, y);
 }
 
 
@@ -2281,8 +2378,11 @@ void Layout::display_teletext(QImage image_teletext)
     int x = panel.x();
     int y = panel.y();
 
-    mtvsystem->draw_overlay(&image, x, y);
-    mtvsystem->overlay_sync();
+    blit_to_frame(&image, x, y);
+    mtvsystem->draw_overlay_fast(&image, x, y);
+    qDebug() << "display_teletext";
+    // flush_overlay();
+    // mtvsystem->overlay_sync();
 }
 
 
@@ -2330,6 +2430,8 @@ static int op47_old[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         }
     }
 
+    qDebug() << "slot_update_op47";
+    // flush_overlay();
 }
 
 
@@ -2375,7 +2477,8 @@ void Layout::display_scte_104(int index)
     int x = panel.x();
     int y = panel.y();
 
-    mtvsystem->draw_overlay(&image_scte_104, x, y);
+    blit_to_frame(&image_scte_104, x, y);
+    mtvsystem->draw_overlay_fast(&image_scte_104, x, y);
 }
 
 
@@ -2414,7 +2517,8 @@ void Layout::display_op47_icons(int cell_index)
     int x =panel.x();
     int y =panel.y();
 
-    mtvsystem->draw_overlay(&image_text_icons, x, y);
+    blit_to_frame(&image_text_icons, x, y);
+    mtvsystem->draw_overlay_fast(&image_text_icons, x, y);
 }
 
 
@@ -2429,5 +2533,6 @@ void Layout::slot_splice(int index, QString text_in, QString text_out)
     scte_104_splice[index].in  = text_in;
     scte_104_splice[index].out = text_out;
     display_scte_104(index);
+    qDebug() << "slot_splice";
+    // flush_overlay();
 }
-

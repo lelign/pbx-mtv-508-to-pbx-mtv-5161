@@ -8,7 +8,7 @@
 . /opt/poky/5.2.4/environment-setup-cortexa9t2hf-neon-poky-linux-gnueabi
 
 cd build; cmake ..; make -j $(nproc)
-cmake ..; make -j $(nproc)
+cd ..; rm -rf build; mkdir build && cd build; cmake ..; make -j $(nproc)
 
 # tar archive:
 tar -cvzf ~/poky-socfpga/poky/layers/meta-customer/recipes-customer/application_26_05/files/pbx-mtv-5161-$(date +"v%d%m-%H-%M").tar.gz -C ../ .

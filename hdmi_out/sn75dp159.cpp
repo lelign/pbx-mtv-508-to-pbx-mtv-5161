@@ -72,7 +72,8 @@ static QLoggingCategory successCategory("SUCCESS"); // Будет обрабат
 Sn75dp159::Sn75dp159(uint8_t i2c_addr){
     sn75_Mode = QCoreApplication::arguments().contains("--sn75");
     if (sn75_Mode) {
-        qCInfo(infoCategory) << "initialization sn159dp on " << i2c_filename_sn75dp << "addr" << hex << i2c_addr;
+        // qCInfo(infoCategory) << "initialization sn159dp on " << i2c_filename_sn75dp << "addr" << hex << i2c_addr;
+        qCInfo(infoCategory) << "initialization sn159dp on " << i2c_filename_sn75dp << "addr" << Qt::hex << i2c_addr;
     }
     
     sn75dp_addr = i2c_addr;
