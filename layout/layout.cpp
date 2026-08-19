@@ -72,11 +72,8 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     connect(gpio, &Gpio::signal_time_count_stop,  timer_time_counter, &Time_counter::slot_stop);
     emit gpio->signal_time_count_start();
 
-    // SVG часовых стрелок грузим один раз, а не при каждой отрисовке
+    // SVG циферблата грузим один раз; сами стрелки теперь рисуются вручную (см. draw_analog_clock)
     m_clock_face.load(QString(":/image/clock/face.svg"));
-    m_hour_hand.load(QString(":/image/clock/hour_hand.svg"));
-    m_minute_hand.load(QString(":/image/clock/minute_hand.svg"));
-    m_second_hand.load(QString(":/image/clock/second_hand.svg"));
 
     timer_analog_clock.start(50); // 10 (20) Гц — достаточно, чтобы секундная стрелка выглядела "скользящей"
     connect(&timer_analog_clock, &QTimer::timeout, this, &Layout::slot_draw_analog_clock_tick);
@@ -664,9 +661,6 @@ static int output_format_old = -1;
         
     
     blit_to_frame(&layout_border, 0, 0);
-    // mtvsystem->draw_overlay_fast(&layout_border, 0, 0);
-
-        // mtvsystem->overlay_sync();
 
     qDebug(category) << "The blit_to_frame operation took" << timer.elapsed() << "milliseconds";
 
@@ -674,6 +668,10 @@ static int output_format_old = -1;
     slot_draw_time_counter(time_counter.text);
 
     qDebug() << "draw_overlay";
+    // Это единственное место, где пересобирается ВЕСЬ экран целиком (не точечный
+    // патч) - тут двойная буферизация оправдана: собираем полную картинку в
+    // full_overlay_frame -> draw_overlay() пишет её в НЕАКТИВНЫЙ буфер -> flip.
+    // Так зритель не видит, как раскладка перестраивается "по кускам" вживую.
     flush_overlay();
 }
 
@@ -1698,47 +1696,77 @@ void Layout::draw_analog_clock()
     if(!clock_cell.enable) return;
     if(solo_mode.enable)   return;
 
-    QRect clock_rec =analog_clock.clock_size;
+    QRect clock_rec = analog_clock.clock_size;
     int side = qMin(clock_rec.width(), clock_rec.height());
     side &= ~0x07;
     clock_rec.translate((analog_clock.cell.width() - side)/2, 0);
 
-    QImage image_clock(side, side, QImage::Format_ARGB32);
-    image_clock.fill(0x00000000);  // partly transparent background
+    // Циферблат (риски/цифры) не меняется от тика к тику - рендерим SVG только
+    // при первом вызове или если поменялся размер (сменилась раскладка), а не
+    // на каждый вызов таймера. Дальше просто копируем готовую картинку (Qt
+    // copy-on-write - это дёшево, реальное копирование произойдёт только когда
+    // мы начнём рисовать поверх).
+    if(m_clock_face_cache.width() != side) {
+        m_clock_face_cache = QImage(side, side, QImage::Format_ARGB32);
+        m_clock_face_cache.fill(0x00000000);
+        QPainter face_painter(&m_clock_face_cache);
+        face_painter.setRenderHint(QPainter::Antialiasing);
+        m_clock_face.render(&face_painter);
+        face_painter.end();
+    }
+
+    QImage image_clock = m_clock_face_cache;
 
     QPainter painter(&image_clock);
+    painter.setRenderHint(QPainter::Antialiasing);
 
     QTime time = QTime::currentTime();
     // Дробные секунды (с учётом миллисекунд) - на них и держится плавность хода стрелки
     double sec_frac = time.second() + time.msec() / 1000.0;
 
-    // Draw the clock face
-    m_clock_face.render(&painter);
-    painter.save();
+    double cx = image_clock.width()  / 2.0;
+    double cy = image_clock.height() / 2.0;
+    double r  = image_clock.width()  / 2.0;
 
-    // Draw the hour hand
-    painter.translate(image_clock.width() / 2, image_clock.height() / 2);
-    painter.rotate(30.0 * (time.hour() + time.minute() / 60.0));
+    // Рисуем стрелку как заострённый к концу многоугольник вместо SVG-рендера:
+    // быстрее (нет разбора векторного документа) и даёт полный контроль над формой.
+    auto draw_hand = [&](double angle_deg, double length_ratio, double width, const QColor &color, double tail_ratio)
+    {
+        painter.save();
+        painter.translate(cx, cy);
+        painter.rotate(angle_deg);
 
-    painter.translate(-image_clock.width() / 2, -image_clock.height() / 2);
-    m_hour_hand.render(&painter);
-    painter.restore();
-    painter.save();
+        double len  = r * length_ratio;
+        double tail = r * tail_ratio;
 
-    // Draw the minute hand
-    painter.translate(image_clock.width() / 2,image_clock.height() / 2);
-    painter.rotate(6.0 * (time.minute() + sec_frac / 60.0));
-    painter.translate(-image_clock.width() / 2, -image_clock.height() / 2);
-    m_minute_hand.render(&painter);
-    painter.restore();
-    painter.save();
+        QPainterPath path;
+        path.moveTo(-width / 2.0, tail);
+        path.lineTo(-width / 4.0, -len + width);
+        path.lineTo(0,            -len);
+        path.lineTo( width / 4.0, -len + width);
+        path.lineTo( width / 2.0, tail);
+        path.closeSubpath();
 
-    // Draw the second hand
-    painter.translate(image_clock.width() / 2, image_clock.height() / 2);
-    painter.rotate(6.0 * sec_frac);
-    painter.translate(-image_clock.width() / 2, -image_clock.height() / 2);
-    m_second_hand.render(&painter);
-    painter.restore();
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(color);
+        painter.drawPath(path);
+        painter.restore();
+    };
+
+    const QColor hand_color(30, 30, 30);
+    const QColor second_hand_color(190, 30, 30);
+
+    // Часовая - короткая и толстая
+    draw_hand(30.0 * ((time.hour() % 12) + time.minute() / 60.0), 0.50, r * 0.07, hand_color, 0.0);
+    // Минутная - длиннее и тоньше
+    draw_hand(6.0  * (time.minute() + sec_frac / 60.0),           0.75, r * 0.04, hand_color, 0.0);
+    // Секундная - тонкая, с небольшим "противовесом"-хвостиком, как у настоящих часов
+    draw_hand(6.0 * sec_frac,                                     0.85, r * 0.025, second_hand_color, 0.15);
+
+    // Ось в центре
+    painter.setPen(Qt::NoPen);
+    painter.setBrush(second_hand_color);
+    painter.drawEllipse(QPointF(cx, cy), r * 0.025, r * 0.025);
 
     painter.end();
 

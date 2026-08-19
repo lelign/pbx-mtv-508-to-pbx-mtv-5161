@@ -256,9 +256,7 @@ private:
     QTimer timer_analog_clock;      // для плавного хода секундной стрелки (чаще 1 раза в секунду)
 
     QSvgRenderer m_clock_face;
-    QSvgRenderer m_hour_hand;
-    QSvgRenderer m_minute_hand;
-    QSvgRenderer m_second_hand;
+    QImage       m_clock_face_cache;   // циферблат не меняется - рендерим SVG один раз, дальше просто копируем
 
     PbxMtvSystem    *mtvsystem;
     //mb86m26_control *m26_control;
