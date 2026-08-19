@@ -1387,6 +1387,72 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
         qCritical() << "Failed to execute IOCTL FLIP! Error code:" << errno;
         return;
     }
+    qDebug(category) << "current_idx" << this->current_buffer_index;
+}
+
+// Быстрый путь для мелких, часто меняющихся элементов (секундная стрелка,
+// десятые доли секунды таймера и т.п.).
+//
+// В отличие от draw_overlay(): пишет НЕ во второй (неактивный) буфер с
+// последующим flip, а СРАЗУ в буфер, который FPGA читает ПРЯМО СЕЙЧАС
+// (current_buffer_index). Никакого ioctl FLIP не делается - он тут не нужен:
+// slot_fps_hardware_trigger() и так "кикает" драйвер каждые ~16мс, повторно
+// выставляя дескриптор ТОГО ЖЕ буфера, так что запись подхватится сама
+// в пределах одного кадра.
+//
+// Компромисс: т.к. буфер активный (его в этот самый момент может читать
+// FPGA), теоретически возможен micro-artefact/разрыв на текущей строке
+// в течение одного кадра, если запись совпадёт по времени с чтением этой
+// же строки. Для маленького, редко (относительно 60 Гц) обновляемого
+// элемента (клок раз в 100мс) это не должно быть заметно, а на следующем
+// кадре всё уже консистентно. Если это станет проблемой - придётся уходить
+// на shadow-copy back-buffer (см. обсуждение).
+void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y)
+{
+    QElapsedTimer timer;
+    timer.start();  
+
+    if (!image) {
+        qCritical() << "CRITICAL ERROR: QImage pointer is NULL!";
+        return;
+    }
+    if (!buffer) {
+        qCritical() << "CRITICAL ERROR: Output buffer pointer is NULL!";
+        return;
+    }
+    if (image->format() != QImage::Format_ARGB32 && image->format() != QImage::Format_RGB32) {
+        qCritical() << "WARNING: QImage format is not ARGB32/RGB32! Current format:" << image->format();
+    }
+
+    // Выравниваем offset_x вниз до чётного - сетка макропикселей Cb/Y/A/Cr/Y/A
+    // завязана на пары колонок, и convert_line всегда начинает писать с фазы Cb.
+    int aligned_offset_x = (offset_x / 2) * 2;
+
+    Q_ASSERT(image->width() + aligned_offset_x <= 1920);
+    Q_ASSERT(image->height() + offset_y <= 1080);
+
+    int row_stride = 1920 * 3;
+    int img_w = image->width();
+    int img_h = image->height();
+
+    if ((aligned_offset_x + img_w) > 1920 || (offset_y + img_h) > 1080) {
+        qCritical() << "CRITICAL ERROR: Image with offsets goes out of Full HD bounds!";
+        return;
+    }
+
+    // Ключевое отличие от draw_overlay(): берём current_buffer_index
+    // (активный, читаемый FPGA буфер), а не next_write_index.
+    uint8_t* start_address = reinterpret_cast<uint8_t*>(buffer + (this->current_buffer_index * (video_size / 2)));
+
+    for (int y = 0; y < img_h; ++y) {
+        int screen_y = y + offset_y;
+        uint8_t * row_start_address = start_address + (screen_y * row_stride);
+        uint8_t * current_row_with_offset = row_start_address + (aligned_offset_x * 3);
+
+        convert_line(image, y, img_w, current_row_with_offset);
+    }
+    qDebug(category) << "mtvsystem->draw_overlay_fast();" << timer.elapsed() << "milliseconds" << "current_idx" << this->current_buffer_index;
+    // ioctl FLIP осознанно не делаем - buffer index не меняем.
 }
 
 

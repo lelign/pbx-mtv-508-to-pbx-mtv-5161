@@ -70,6 +70,7 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     connect(timer_time_counter, &Time_counter::signal_time_counter_update, this, &Layout::slot_draw_time_counter);
     connect(gpio, &Gpio::signal_time_count_start, timer_time_counter, &Time_counter::slot_start);
     connect(gpio, &Gpio::signal_time_count_stop,  timer_time_counter, &Time_counter::slot_stop);
+    emit gpio->signal_time_count_start();
 
     // SVG часовых стрелок грузим один раз, а не при каждой отрисовке
     m_clock_face.load(QString(":/image/clock/face.svg"));
@@ -77,7 +78,7 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     m_minute_hand.load(QString(":/image/clock/minute_hand.svg"));
     m_second_hand.load(QString(":/image/clock/second_hand.svg"));
 
-    timer_analog_clock.start(100); // 10 Гц — достаточно, чтобы секундная стрелка выглядела "скользящей"
+    timer_analog_clock.start(50); // 10 (20) Гц — достаточно, чтобы секундная стрелка выглядела "скользящей"
     connect(&timer_analog_clock, &QTimer::timeout, this, &Layout::slot_draw_analog_clock_tick);
 
     ini_alarm_time_threshold();
@@ -257,8 +258,8 @@ void Layout::slot_qpps()
 
     draw_alarm_elapsed();
 
-    qDebug(category) << "slot_qpps";
-    flush_overlay();
+    // qDebug(category) << "slot_qpps";
+    // flush_overlay();
 }
 
 
@@ -274,7 +275,7 @@ static int common_alarm_old = -1;
         check_video_loss(i_cell);
     }
 
-    flush_overlay();
+    // flush_overlay();
 
     int common_alarm = get_common_alarm();
     gpio->set_common_alarm(common_alarm);
@@ -577,7 +578,9 @@ int x, y;
         draw_transparant_text_panel(image_label_panel, panel, FONT_CHANNEL_NAME_SIZE, Qt::AlignCenter, label);
 
     blit_to_frame(&image_label_panel, x, y);
-    flush_overlay();
+    qDebug() << "update_label_name_channel";
+    // flush_overlay();
+    mtvsystem->draw_overlay_fast(&image_label_panel, x, y);
 }
 
 void Layout::update_sdi_format(int index)
@@ -600,6 +603,7 @@ void Layout::update_sdi_format(int index)
     int y =layout_object[k].screen_plan.panel_format_video.y();
 
     blit_to_frame(&image_sdi_panel, x, y);
+    mtvsystem->draw_overlay_fast(&image_sdi_panel, x, y);
 }
 
 void Layout::flush_overlay()
@@ -647,27 +651,29 @@ static int output_format_old = -1;
         output_format_old = output_format;
     }
 
-QElapsedTimer timer;
-timer.start();
-qDebug(category) << "====== Start Measuring ==========";
-    if(solo_mode.enable)
-        layout_border = get_layout_1x1(solo_mode.input);
-    else
-        layout_border = get_layout();
+    QElapsedTimer timer;
+    timer.start();
+    qDebug(category) << "====== Start Measuring ==========";
+        if(solo_mode.enable)
+            layout_border = get_layout_1x1(solo_mode.input);
+        else
+            layout_border = get_layout();
 
-qDebug(category) << "The get_layout_3x3 operation took" << timer.elapsed() << "milliseconds";
+    qDebug(category) << "The get_layout_3x3 operation took" << timer.elapsed() << "milliseconds";
 
+        
     
-   
     blit_to_frame(&layout_border, 0, 0);
+    // mtvsystem->draw_overlay_fast(&layout_border, 0, 0);
 
-    // mtvsystem->overlay_sync();
+        // mtvsystem->overlay_sync();
 
-qDebug(category) << "The blit_to_frame operation took" << timer.elapsed() << "milliseconds";
+    qDebug(category) << "The blit_to_frame operation took" << timer.elapsed() << "milliseconds";
 
     scte_104_update();
     slot_draw_time_counter(time_counter.text);
 
+    qDebug() << "draw_overlay";
     flush_overlay();
 }
 
@@ -675,6 +681,7 @@ void Layout::draw_overlay_test_file()
 {
     QImage overlay_test_file("layout.png");
     blit_to_frame(&overlay_test_file, 0, 0);
+    qDebug() << "draw_overlay_test_file";
     flush_overlay();
     // mtvsystem->draw_overlay(&overlay_test_file);
     // mtvsystem->overlay_sync();
@@ -865,7 +872,8 @@ static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
             if(i == 7) cascade_mode_update(); // чтобы не дёргался вход 8
         }
     }
-    flush_overlay();
+    qDebug() << "routing_source_video";
+    // flush_overlay();
 }
 
 
@@ -1621,7 +1629,9 @@ void Layout::draw_time_counter(label_t label)
     painter.end();
 
     blit_to_frame(&image_time_counter, label.size.x(), label.size.y());
-    mtvsystem->overlay_sync();
+    // Быстрый путь: сразу в активный HW-буфер, не дожидаясь раз-в-секунду flush_overlay().
+    // Это и нужно, чтобы десятые доли секунды реально обновлялись на экране 10 раз/сек.
+    mtvsystem->draw_overlay_fast(&image_time_counter, label.size.x(), label.size.y());
 }
 
 void Layout::draw_digital_clock()
@@ -1670,6 +1680,7 @@ QString date_str;
 
     painter_date.drawText(date_rec, Qt::AlignCenter, date_str);
     blit_to_frame(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
+    mtvsystem->draw_overlay_fast(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
 
     mtvsystem->overlay_sync();
 }
@@ -1732,9 +1743,9 @@ void Layout::draw_analog_clock()
     painter.end();
 
     blit_to_frame(&image_clock, clock_rec.x(),  clock_rec.y());
-    int source = 1;
-    flush_overlay();
-    mtvsystem->overlay_sync(source);
+    // Быстрый путь: сразу в активный HW-буфер (без flip) - FPGA подхватит
+    // изменение стрелок в пределах ~16мс благодаря slot_fps_hardware_trigger().
+    mtvsystem->draw_overlay_fast(&image_clock, clock_rec.x(), clock_rec.y());
 }
 
 
@@ -1774,8 +1785,9 @@ void Layout::slot_TALLY(int input, int state)
         draw_TALLY_indicator_old_style(state, layout_object[k]);
     else
         draw_TALLY_indicator(state, layout_object[k]);
-        
-    flush_overlay();
+    
+    qDebug() << "slot_TALLY";
+    // flush_overlay();
 }
 
 void Layout::draw_TALLY_indicator_old_style(int state, const layout_object_t &layout_object)
@@ -1833,6 +1845,7 @@ void Layout::draw_TALLY_indicator_old_style(QRect cell, QColor color)
     get_image_TALLY_indicator_old_style(image_tally, tally_cell, color);
 
     blit_to_frame(&image_tally, cell.x(), cell.y());
+    mtvsystem->draw_overlay_fast(&image_tally, cell.x(), cell.y());
     mtvsystem->overlay_sync();
 }
 
@@ -1906,6 +1919,7 @@ QColor color;
     }
 
     blit_to_frame(&image_tally, tally_rec.x(), tally_rec.y());
+    mtvsystem->draw_overlay_fast(&image_tally, tally_rec.x(), tally_rec.y());
     mtvsystem->overlay_sync();
 }
 
@@ -2218,6 +2232,7 @@ void Layout::draw_alarm_label(int index, layout_object_t layout_object)
         painter_alarm.setPen(QPen(Qt::white));
         painter_alarm.drawText(alarm_rec, Qt::AlignCenter, alarm_label.at(i).text + elapsed_str);
         blit_to_frame(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
+        mtvsystem->draw_overlay_fast(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
         alarm_label_rec.translate(0, offset_h);
     }
 }
@@ -2318,6 +2333,7 @@ void Layout::clean_teletext_image(int channel)
     int y = panel.y();
 
     blit_to_frame(&image_teletext, x, y);
+    mtvsystem->draw_overlay_fast(&image_teletext, x, y);
 }
 
 
@@ -2335,7 +2351,9 @@ void Layout::display_teletext(QImage image_teletext)
     int y = panel.y();
 
     blit_to_frame(&image, x, y);
-    flush_overlay();
+    mtvsystem->draw_overlay_fast(&image, x, y);
+    qDebug() << "display_teletext";
+    // flush_overlay();
     // mtvsystem->overlay_sync();
 }
 
@@ -2384,7 +2402,8 @@ static int op47_old[8] = {0, 0, 0, 0, 0, 0, 0, 0};
         }
     }
 
-    flush_overlay();
+    qDebug() << "slot_update_op47";
+    // flush_overlay();
 }
 
 
@@ -2431,6 +2450,7 @@ void Layout::display_scte_104(int index)
     int y = panel.y();
 
     blit_to_frame(&image_scte_104, x, y);
+    mtvsystem->draw_overlay_fast(&image_scte_104, x, y);
 }
 
 
@@ -2470,6 +2490,7 @@ void Layout::display_op47_icons(int cell_index)
     int y =panel.y();
 
     blit_to_frame(&image_text_icons, x, y);
+    mtvsystem->draw_overlay_fast(&image_text_icons, x, y);
 }
 
 
@@ -2484,5 +2505,6 @@ void Layout::slot_splice(int index, QString text_in, QString text_out)
     scte_104_splice[index].in  = text_in;
     scte_104_splice[index].out = text_out;
     display_scte_104(index);
-    flush_overlay();
+    qDebug() << "slot_splice";
+    // flush_overlay();
 }
