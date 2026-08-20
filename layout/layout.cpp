@@ -45,8 +45,10 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
 {
     qCDebug(category) << ANSI_GREEN << "creating..." << ANSI_RESET;
 
-    for(int i = 0; i < 8; i++) op47[i] = 0;
-    for(int i = 0; i < 8; i++) op47_latch[i] = 0;
+    // for(int i = 0; i < 8; i++) op47[i] = 0;
+    // for(int i = 0; i < 8; i++) op47_latch[i] = 0;
+    for(int i = 0; i < 16; i++) op47[i] = 0; // change 2
+    for(int i = 0; i < 16; i++) op47_latch[i] = 0; // change 2
     output_format = OUT_STD_1080i50;
 
     for(uint i = 0; i < SizeOfArray(layout_object); ++i) layout_object[i].tally = 0;
@@ -281,10 +283,11 @@ static int common_alarm_old = -1;
 
     QList<int>level_list = mtvsystem->get_audio_level();
 
-    for(int i_cell = 0; i_cell < 8; i_cell++){
+    // for(int i_cell = 0; i_cell < 8; i_cell++){
+    for(int i_cell = 0; i_cell < 16; i_cell++){ // change 1
         check_audio(i_cell, level_list);
         check_freeze(i_cell);
-        check_video_loss(i_cell);
+        check_video_loss(i_cell); // change 1 checked with HELLO in input 4 (i_cell==3)
     }
 
     // flush_overlay();
@@ -520,7 +523,8 @@ QString Layout::sec_to_TimeStr(qint64 sec_val)
 
 void Layout::draw_alarm_elapsed()
 {
-    for(int index = 0; index < 8; ++index) {
+    // for(int index = 0; index < 8; ++index) {
+    for(int index = 0; index < 16; ++index) { // change 2
         int k = cascade.num * 8 + index;
         for(int i = 0; i < layout_object[k].alarm.size(); ++i){
             draw_alarm_label(k, layout_object[k]);
@@ -896,7 +900,7 @@ static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
             if(i == 7) cascade_mode_update(); // чтобы не дёргался вход 8
         }
     }
-    qDebug() << "routing_source_video";
+    qCDebug(category) << ANSI_GREEN << "routing_source_video" << ANSI_RESET;
     // flush_overlay();
 }
 
@@ -2239,7 +2243,7 @@ void Layout::set_layout_plane()
 {
     // qCDebug(category) << ANSI_GREEN << "set_layout_plane()" << SizeOfArray(layout_object) << ANSI_RESET;
     for(uint i = 0; i < SizeOfArray(layout_object); ++i){
-        qCDebug(category) << ANSI_GREEN << "layout_object[i].cell.input" << layout_object[i].cell.input << layout_object[i].cell.enable << ANSI_RESET;
+        // qCDebug(category) << ANSI_GREEN << "layout_object[i].cell.input" << layout_object[i].cell.input << layout_object[i].cell.enable << ANSI_RESET;
         set_cell_plane(layout_object[i]);
     }
 }
@@ -2358,17 +2362,16 @@ int error, error_old;
     if(error){
         alarm_t alarm;
         alarm.bkground_color = QColor(255, 0, 0, 225);
-        alarm.text = "Video loss";
+        alarm.text = "Video loss";        
         alarm.type = VIDEO_LOST;
         alarm.time.start();
-        layout_object[k].alarm.append(alarm);
-        qCDebug(category) << ANSI_GREEN << "slot_check_video_loss if(error) cell_index" << cell_index << ANSI_RESET;
+        layout_object[k].alarm.append(alarm);        
     }
     else{
         layout_object[k].alarm.removeAt(index);
-        qCDebug(category) << ANSI_GREEN << "slot_check_video_loss else cell_index" << cell_index << ANSI_RESET;
+        
     }
-
+    
     if(error)
         eventlog_add_input_state("Video Input %1: Loss", cell_index);
 
@@ -2376,7 +2379,7 @@ int error, error_old;
         op47[0] = 0;
         clean_teletext_image(0); // "0" - телетекст отображается только в первом окне
     }
-
+    // qCDebug(category) << ANSI_GREEN << "slot_check_video_loss if(error) cell_index error" << ANSI_RESET<< cell_index << error; 
 }
 /*---------------------------------------------------------------------------*/
 QString Layout::get_num_input(int in_num)

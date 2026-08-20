@@ -206,10 +206,9 @@ void Mtv_web::clear_sdi_format_str(int cascade_index)
 /*---------------------------------------------------------------------------*/
 void Mtv_web::slot_new_format()
 {
-    qDebug(category) << "New SDI Input Format";
-
     QByteArray to_send_data = get_json_block_configuration();
     web_server->sendall(to_send_data);
+    qCDebug(category) << ANSI_MAGENTA << "slot_new_format() to_send_data.size()" << ANSI_RESET << to_send_data.size();
 }
 /*---------------------------------------------------------------------------*/
 void Mtv_web::slot_web_message(QWebSocket *pClient, QJsonObject obj)
