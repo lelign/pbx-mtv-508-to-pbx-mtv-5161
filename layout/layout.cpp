@@ -1648,7 +1648,7 @@ QString date_str;
     QRect clock_rec = digital_clock.clock_size;
     clock_rec.moveTo(0,0);
     QImage image_clock(clock_rec.width(), clock_rec.height(), QImage::Format_ARGB32);
-    image_clock.fill(Qt::black);
+    image_clock.fill(Qt::transparent);
     QPainter painter(&image_clock);
     painter.setFont(clock_font);
     painter.setPen(QPen(Qt::white));
@@ -1656,11 +1656,12 @@ QString date_str;
     painter.drawText(clock_rec, Qt::AlignCenter, digital_clock_str);
     painter.end();
     blit_to_frame(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
+    mtvsystem->draw_overlay_fast(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
 
     QRect date_rec = digital_clock.date_rec;
     date_rec.moveTo(0,0);
     QImage image_date(date_rec.width(), date_rec.height(), QImage::Format_ARGB32);
-    image_date.fill(Qt::black);
+    image_date.fill(Qt::transparent);
     QPainter painter_date(&image_date);
 
     int Date_FontSize = digital_clock.date_rec.height() * 0.45;
