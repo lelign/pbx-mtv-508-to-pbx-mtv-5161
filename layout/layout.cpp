@@ -5,11 +5,15 @@
 #include <QLocale>
 #include <QPainterPath> // ign
 
+
+static QLoggingCategory category("LayoutClass");
 #define LAYOUT_PRESET_FILE_NAME      ("pbx-mtv-508_layout_preset")
 #define SETTINGS_SDI_INPUT_FILE_NAME ("pbx-mtv-508_sdi_input")
 #define TCP_PORT 10110
 
-static QLoggingCategory category("\033[32m Layout Class \033[0m");
+
+
+
 #define PEN_WIDTH 2
 #define SizeOfArray(a) (sizeof(a)/sizeof(*a))
 #define FONT_SDI_FORMAT_SIZE 14
@@ -34,13 +38,12 @@ static QLoggingCategory category("\033[32m Layout Class \033[0m");
 #define TALLY_GREEN_OFF_COLOR QColor(0x00, 0x00, 0x00)
 
 
-
 //Layout::Layout(PbxMtvSystem *mtvsystem,  mb86m26_control *m26_control, Gpio *gpio, Eventlog *eventlog) :
 //    mtvsystem(mtvsystem), m26_control(m26_control), gpio(gpio), eventlog(eventlog)
 Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     mtvsystem(mtvsystem), gpio(gpio), eventlog(eventlog)
 {
-    qCDebug(category) << "creating...";
+    qCDebug(category) << ANSI_GREEN << "creating..." << ANSI_RESET;
 
     for(int i = 0; i < 8; i++) op47[i] = 0;
     for(int i = 0; i < 8; i++) op47_latch[i] = 0;
@@ -81,18 +84,30 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     ini_alarm_time_threshold();
     hdmi_color = 1;
 
+
+    // qCDebug(category) << ANSI_GREEN << "SizeOfArray(layout_object)" << SizeOfArray(layout_object) << ANSI_RESET;
+    // for(uint i = 0; i < SizeOfArray(layout_object); i++){           
+    //         qCDebug(category) << ANSI_GREEN << "before setting read layout_object[i].sdi_label" 
+    //         << layout_object[i].sdi_label ;
+    //     }
+    
     Settings_Read();
+
+    // for(uint i = 0; i < SizeOfArray(layout_object); i++){           
+    //     qCDebug(category) << ANSI_GREEN << "after setting read layout_object[i].sdi_label" 
+    //     << layout_object[i].sdi_label << ANSI_RESET;
+    // }
 
     gpio->set_mode(gpio_mode);
     preset_Layout_Read(layout_preset.index);
-    qDebug(category) << "\t\tpreset_Layout_Read" << layout_preset.name[0] << "\033[0m";
+    qCDebug(category) << ANSI_GREEN << "preset_Layout_Read" << ANSI_RESET;
 
     sound_routing();
-    QImage my_image; //ign
-    //get_layout();
-    my_image = get_layout(); // ign
+    // QImage my_image; //ign
+    // //get_layout();
+    // my_image = get_layout(); // ign
     
-    qDebug(category) <<"\t\tget_layout returned my_image" << my_image.size();
+    // qDebug(category) <<"\t\tget_layout returned my_image" << my_image.size();
 
     cascade_server = new Cascade_server(TCP_PORT);
     connect(cascade_server, &Cascade_server::signal_new_client,    this, &Layout::slot_master_connected);
@@ -145,7 +160,7 @@ void Layout::debugPrintJson(QString str, QByteArray data)
 {
     QJsonParseError err;
     QJsonDocument saveDoc = QJsonDocument::fromJson(data, & err);
-    qCDebug(category) << str << "\n" << saveDoc.toJson().toStdString().c_str();
+    qCDebug(category) << ANSI_GREEN << str << "\n" << saveDoc.toJson().toStdString().c_str()<< ANSI_RESET;
 }
 
 
@@ -170,12 +185,12 @@ void Layout::slot_cascade_device_connected(int index)
 
 void Layout::slot_master_connected(QTcpSocket* pSocket, QString ip)
 {
-    qCDebug(category) << "The master connected with ip:" << ip << "port:" << pSocket->localPort();
+    qCDebug(category) << ANSI_GREEN << "The master connected with ip:" << ip << "port:" << pSocket->localPort() << ANSI_RESET;
 }
 
 void Layout::slot_Disconnected(QTcpSocket* pSocket)
 {
-    qCDebug(category) << "disconnected:" << pSocket->peerAddress().toString();
+    qCDebug(category) << ANSI_GREEN << "disconnected:" << pSocket->peerAddress().toString() << ANSI_RESET;
 }
 
 void Layout::slot_tcp_server_readyRead(QTcpSocket* pSocket, QByteArray data)
@@ -517,11 +532,11 @@ void Layout::draw_alarm_elapsed()
 
 void Layout::slot_new_format()
 {
-    qDebug(category) << "New SDI Input Format";
+    qCDebug(category) << ANSI_GREEN << "\n\t\tNew SDI Input Format\n" << ANSI_RESET;
     routing_source_video();
     update_alarm();
 
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         int k = cascade.num * 8 + i;
         layout_object[k].sdi_format_str = mtvsystem->get_sdi_format_str(i);
 
@@ -610,19 +625,27 @@ void Layout::flush_overlay()
     QElapsedTimer timer;
     timer.start();  
     mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);
-    qDebug(category) << "mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);" << timer.elapsed() << "milliseconds";
+    qCDebug(category) << ANSI_GREEN << "flashed, timer:"<< ANSI_RESET << timer.elapsed() << "milliseconds";
     // system("devmem2 0xFF200004 w 1");  
-    qDebug(category) << "flush_overlay";
+    // qDebug(category) << "flush_overlay";
 }
 
 void Layout::blit_to_frame(QImage *image, int x, int y)
 {
+    // 1. Сохраняем аргументы текущего вызова в коллекцию
+    if (image) {
+        BlitArgs args = { x, y, image->width(), image->height() };
+        current_frame_args.push_back(args);
+    }
+
+    // 2. Ваш оригинальный код отрисовки
     QPainter painter(&full_overlay_frame);
     // Source, а не SourceOver: полностью ЗАМЕЩАЕТ пиксели и альфа-канал в этом
     // прямоугольнике, включая обнуление альфы там, где рисуемая картинка прозрачна.
     // Это и есть механизм "очистки" старого содержимого региона.
     painter.setCompositionMode(QPainter::CompositionMode_Source);
     painter.drawImage(x, y, *image);
+    // flush_blit_logs();
 }
 
 void Layout::draw_overlay()
@@ -650,24 +673,27 @@ static int output_format_old = -1;
 
     QElapsedTimer timer;
     timer.start();
-    qDebug(category) << "====== Start Measuring ==========";
+    qCDebug(category) << ANSI_GREEN << "====== Start Measuring ==========" << ANSI_RESET;
         if(solo_mode.enable)
             layout_border = get_layout_1x1(solo_mode.input);
         else
             layout_border = get_layout();
 
-    qDebug(category) << "The get_layout_3x3 operation took" << timer.elapsed() << "milliseconds";
+    qCDebug(category) << ANSI_GREEN 
+                        << "The get_layout "<< grid <<" operation took" << ANSI_RESET << timer.elapsed() << "milliseconds";
+                        
 
         
     
     blit_to_frame(&layout_border, 0, 0);
 
-    qDebug(category) << "The blit_to_frame operation took" << timer.elapsed() << "milliseconds";
+    qCDebug(category) << ANSI_GREEN 
+                        << "The blit_to_frame operation took"  << ANSI_RESET << timer.elapsed() << "milliseconds";
 
     scte_104_update();
     slot_draw_time_counter(time_counter.text);
 
-    qDebug() << "draw_overlay";
+    qCDebug(category) << ANSI_GREEN << "\n\t\tdraw_overlay > flush_overlay !!!\n" << ANSI_RESET;
     // Это единственное место, где пересобирается ВЕСЬ экран целиком (не точечный
     // патч) - тут двойная буферизация оправдана: собираем полную картинку в
     // full_overlay_frame -> draw_overlay() пишет её в НЕАКТИВНЫЙ буфер -> flip.
@@ -675,15 +701,15 @@ static int output_format_old = -1;
     flush_overlay();
 }
 
-void Layout::draw_overlay_test_file()
-{
-    QImage overlay_test_file("layout.png");
-    blit_to_frame(&overlay_test_file, 0, 0);
-    qDebug() << "draw_overlay_test_file";
-    flush_overlay();
-    // mtvsystem->draw_overlay(&overlay_test_file);
-    // mtvsystem->overlay_sync();
-}
+// void Layout::draw_overlay_test_file()
+// {
+//     QImage overlay_test_file("layout.png");
+//     blit_to_frame(&overlay_test_file, 0, 0);
+//     qDebug() << "draw_overlay_test_file";
+//     flush_overlay();
+//     // mtvsystem->draw_overlay(&overlay_test_file);
+//     // mtvsystem->overlay_sync();
+// }
 
 void Layout::set_aspect_ratio(QRect &rec, int index)
 {
@@ -950,10 +976,22 @@ int x1, x2;
     mtvsystem->bars_configure(router_source, x1, x2, y, scale, enable_1, enable_2);
 }
 
-QString Layout::sdi_key_name(int i)
+// QString Layout::sdi_key_name(int i)
+// // Этот метод берет порядковый номер (индекс i) какого-то внутреннего канала SDI и превращает его в 
+// // красивое человеческое имя формата «НомерГруппы.НомерКанала» (например, 1.1, 1.8, 2.3).
+// {
+//     int major = (i >>   3) + 1;
+//     int minor = (i & 0x07) + 1;
+//     return QString("%1.%2").arg(major).arg(minor);
+// }
+
+QString Layout::sdi_key_name(int i) // increased to 16 channels
 {
-    int major = (i >>   3) + 1;
-    int minor = (i & 0x07) + 1;
+    // Сдвиг на 4 бита вправо (i >> 4) — это быстрое деление на 16 нацело.
+    int major = (i >>   4) + 1;    
+    // Маска 0x0F (в двоичной системе 00001111) — это взятие остатка от деления на 16 (i % 16).
+    // Результат будет от 0 до 15. Прибавляем 1, чтобы получить каналы от 1 до 16.
+    int minor = (i & 0x0F) + 1;    
     return QString("%1.%2").arg(major).arg(minor);
 }
 
@@ -1084,16 +1122,19 @@ QString Layout::get_preset_file_name(int preset_num)
 }
 
 void Layout::preset_Layout_Read(int preset_num){
-const int x[] = { 0, 1, 2, 0, 1, 2, 0, 1};
-const int y[] = { 0, 0, 0, 1, 1, 1, 2, 2};
+// const int x[] = { 0, 1, 2, 0, 1, 2, 0, 1}; // for grid 3*3 ?
+// const int y[] = { 0, 0, 0, 1, 1, 1, 2, 2};
+const int x[] = { 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3}; // try grid 4 * 4
+const int y[] = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3};
 
     QString file_name = get_preset_file_name(preset_num);
 
     QSettings settings(QSettings::SystemScope, file_name); // settings init
 
     for(uint i = 0; i < SizeOfArray(layout_object); ++i){
-        int k = i & 0x07;
-        int enable = i < 8;
+        // int k = i & 0x07;        
+        int k = i & 0x0F;// чтобы значения остатка были в диапазоне от 0 до 15
+        int enable = i < 16;
         QString name_group = "cell_" + QString::number(i);
         settings.beginGroup(name_group);
             layout_object[i].cell.border_color       = settings.value("border_color",             0).toInt();
@@ -1133,11 +1174,15 @@ const int y[] = { 0, 0, 0, 1, 1, 1, 2, 2};
     }
 
     settings.beginGroup("common_setting");
-        grid   = settings.value("grid",   GRID_3x3).toInt();
+        // grid   = settings.value("grid",   GRID_3x3).toInt();
+        grid   = settings.value("grid",   GRID_4x4).toInt();// default settings, checked
+
+        
     settings.endGroup();
 
     settings.beginGroup("clock_cell");
-        clock_cell.enable      = settings.value("enable",         1).toInt();
+        // clock_cell.enable      = settings.value("enable",         1).toInt();
+        clock_cell.enable      = settings.value("enable",         0).toInt();// времнно отключил часы 
         clock_cell.scale_x     = settings.value("scale_x",        0).toInt();
         clock_cell.scale_y     = settings.value("scale_y",        0).toInt();
         clock_cell.x           = settings.value("x",              2).toInt();
@@ -1326,10 +1371,10 @@ void Layout::get_grid_size()
 
 QImage Layout::get_layout()
 {
-    get_grid_size();
+    get_grid_size(); // case GRID_4x4: width_grid  =  WIDTH_4x4; height_grid = HEIGHT_4x4;
 
-    set_time_counter_plane();
-    set_label_plane();
+    set_time_counter_plane(); // counter
+    set_label_plane(); // labels
     set_layout_plane();
     set_teletext_plane(layout_object[0].screen_plan.cell);
     set_clock_plane();
@@ -1339,14 +1384,16 @@ QImage Layout::get_layout()
 
     QImage image(1920, 1080, QImage::Format_ARGB32);
 
-    for(int i = 0; i < 8; ++i){
+    // for(int i = 0; i < 8; ++i){ // после этих измений получил defalt экран с 16 входами, пока без video loss
+    for(int i = 0; i < 16; ++i){
         int k = cascade.num * 8 + i;
         layout_object[k].screen_plan.enable_video = layout_object[k].cell.enable;
         if(layout_object[k].screen_plan.enable_video)
             draw_layout_object(image, layout_object[k]);
     }
 
-    for(int i = 0; i < 8; ++i){
+    // for(int i = 0; i < 8; ++i){ //
+    for(int i = 0; i < 16; ++i){
         int k = cascade.num * 8 + i;
         if(label_cell[k].enable)
             draw_label_object(image, label_cell[k]);
@@ -1900,6 +1947,7 @@ QRect cell;
 QColor color;
 
     if(tally_indicator_mode == TALLY_OFF){
+        qCDebug(category) << ANSI_GREEN << "tally_indicator_mode == TALLY_OFF" << TALLY_OFF << layout_object.cell.input << ANSI_RESET;
         clear_TALLY_indicator(layout_object);
         return;
     }
@@ -1919,9 +1967,25 @@ QColor color;
             break;
     }
 
+    /*switch(tally_indicator_mode) { // не нашел эти цвета на экране
+        case TALLY_RED:
+            color = Qt::blue;
+            break;
+        case TALLY_GREEN:
+            color = Qt::green;
+            break;
+        case TALLY_RED_AND_GREEN:
+            color = Qt::magenta;
+            break;
+        default:
+            color = Qt::yellow;
+            break;
+    }*/
+
     cell = layout_object.screen_plan.cell;
     tally_rec = get_TALLY_indicator_rec(cell);
 
+    qCDebug(category) << ANSI_GREEN << "draw_TALLY_indicator" << layout_object.cell.input << cell << color << ANSI_RESET;
     QImage image_tally(tally_rec.width(), tally_rec.height(),  QImage::Format_ARGB32);
     QRect alarm_rec;
     alarm_rec = QRect(0, 0, tally_rec.width(), tally_rec.height());
@@ -2173,7 +2237,9 @@ int width, height;
 
 void Layout::set_layout_plane()
 {
+    // qCDebug(category) << ANSI_GREEN << "set_layout_plane()" << SizeOfArray(layout_object) << ANSI_RESET;
     for(uint i = 0; i < SizeOfArray(layout_object); ++i){
+        qCDebug(category) << ANSI_GREEN << "layout_object[i].cell.input" << layout_object[i].cell.input << layout_object[i].cell.enable << ANSI_RESET;
         set_cell_plane(layout_object[i]);
     }
 }
@@ -2296,9 +2362,11 @@ int error, error_old;
         alarm.type = VIDEO_LOST;
         alarm.time.start();
         layout_object[k].alarm.append(alarm);
+        qCDebug(category) << ANSI_GREEN << "slot_check_video_loss if(error) cell_index" << cell_index << ANSI_RESET;
     }
     else{
         layout_object[k].alarm.removeAt(index);
+        qCDebug(category) << ANSI_GREEN << "slot_check_video_loss else cell_index" << cell_index << ANSI_RESET;
     }
 
     if(error)
@@ -2410,9 +2478,10 @@ QImage Layout::fast_scale(QImage image, int width, int height)
 
 void Layout::slot_update_op47()
 {
-static int op47_old[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+// static int op47_old[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+static int op47_old[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         if(op47_latch[i])
             op47[i] = 1;
         else
@@ -2423,21 +2492,22 @@ static int op47_old[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
     if(op47_old[0] != op47[0]) clean_teletext_image(0); // телетекст отображается только в первом окне
 
-    for(int i = 0; i < 8; ++i){
+    // for(int i = 0; i < 8; ++i){ 
+    for(int i = 0; i < 16; ++i){
         if(op47_old[i] != op47[i]){
             op47_old[i] = op47[i];
             display_op47_icons(i);
         }
     }
 
-    qDebug() << "slot_update_op47";
+    // qCDebug(category) << ANSI_GREEN << "slot_update_op47" << ANSI_RESET;
     // flush_overlay();
 }
 
 
 void Layout::scte_104_update()
 {
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         display_scte_104(i);
     }
 }
@@ -2535,4 +2605,30 @@ void Layout::slot_splice(int index, QString text_in, QString text_out)
     display_scte_104(index);
     qDebug() << "slot_splice";
     // flush_overlay();
+}
+
+void Layout::flush_blit_logs()
+{
+    if (current_frame_args != last_printed_args) {
+        
+        // Используем \033[33m для желтого цвета и \033[0m для сброса цвета
+        QString log_msg = QString("\033[32m[Layout Blit Changed] Count: %1 -> Processes:\033[0m ").arg(current_frame_args.size());
+        
+        for (size_t i = 0; i < current_frame_args.size(); ++i) {
+            log_msg += QString("[%1: x=%2, y=%3, w=%4, h=%5] ")
+                       .arg(i)
+                       .arg(current_frame_args[i].x)
+                       .arg(current_frame_args[i].y)
+                       .arg(current_frame_args[i].width)
+                       .arg(current_frame_args[i].height);
+        }
+
+        // Выводим в поток qCDebug. 
+        // ВНИМАНИЕ: используем .toUtc8().constData(), чтобы Qt не экранировал символы обратно в текст
+        qCDebug(category, "%s", log_msg.toUtf8().constData());
+
+        last_printed_args = current_frame_args;
+    }
+
+    current_frame_args.clear();
 }

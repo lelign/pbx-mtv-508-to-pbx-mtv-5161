@@ -10,6 +10,11 @@
 #include <QElapsedTimer>
 #include <nlohmann/json.hpp> // jq
 
+
+#define ANSI_MAGENTA  "\033[35m" //colorised output
+#define ANSI_RED  "\033[31m" //colorised output
+#define ANSI_RESET  "\033[0m"
+
 typedef struct {
         int id;
         uint32_t interlaced;
@@ -91,6 +96,7 @@ private:
         bool m_jqMode; // Флаг для хранения состояния режима jq
         bool m_rw; // Флаг для хранения состояния режима read write str-mem disabled
         int current_buffer_index;
+        int64_t last_elapsed_time = -1; // чтобы не сыпал в терминал
 private slots:
         void slot_fps_hardware_trigger();
 private Q_SLOTS:

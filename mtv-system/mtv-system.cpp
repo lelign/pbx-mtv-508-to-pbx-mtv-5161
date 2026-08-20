@@ -426,8 +426,12 @@ PbxMtvSystem::PbxMtvSystem()
         init_overlay_memory();
         uint8_t* start_address = reinterpret_cast<uint8_t*>(buffer);
         uint8_t* end_address   = start_address + video_size;
-        qDebug(category) << "Buffer START address:" << static_cast<void*>(start_address);
-        qDebug(category) << "Buffer END   address:" << static_cast<void*>(end_address);
+        qCDebug(category) << ANSI_MAGENTA 
+                        << "\t\tBuffer START address:" << static_cast<void*>(start_address)
+                        << "\n\t\tBuffer END   address:" << static_cast<void*>(end_address)
+                        << ANSI_RESET;
+        // qDebug(category) << "Buffer START address:" << static_cast<void*>(start_address);
+        // qDebug(category) << "Buffer END   address:" << static_cast<void*>(end_address);
         //qDebug(category) << "Total buffer size:   " << video_size << "bytes";
         
         connect(&sdi_format_timer, &QTimer::timeout, this, &PbxMtvSystem::sdi_format_timeout);
@@ -453,33 +457,7 @@ PbxMtvSystem::~PbxMtvSystem()
 #include <fcntl.h>
 #include <unistd.h>
 
-/*init_overlay_memory() добавьте старт таймера:*/
-/*void PbxMtvSystem::init_overlay_memory() {
-    overlay_fd = open("/dev/mtv-overlay", O_RDWR);
-    if (overlay_fd >= 0) {
-        //buffer = (char*)mmap(NULL, 1920*1080*3, PROT_READ | PROT_WRITE, MAP_SHARED, overlay_fd, 0);
-        buffer = (char*)mmap(NULL, 1920*1080*2, PROT_READ | PROT_WRITE, MAP_SHARED, overlay_fd, 0);
 
-        if (buffer != MAP_FAILED) {
-            qDebug(category) << "Success! Kernel memory mapped via mmap";
-
-            // ИНИЦИАЛИЗИРУЕМ АППАРАТНЫЙ ТАЙМЕР НА 60 Гц (16 мс) 
-            fps_timer = new QTimer(this);
-            connect(fps_timer, &QTimer::timeout, this, &PbxMtvSystem::slot_fps_hardware_trigger);
-            fps_timer->setInterval(16); // 16 мс = ~60 кадров в секунду
-            fps_timer->start();
-        }else{
-
-                qDebug(category) << "else Success";
-
-        }
-
-    }else{
-        qDebug(category) << "if (overlay_fd >= 0)";
-
-    }
-}
-*/
 
 void PbxMtvSystem::init_overlay_memory() {
     // Выставляем полный размер RGB888 кадра
@@ -491,43 +469,19 @@ void PbxMtvSystem::init_overlay_memory() {
         buffer = (char*)mmap(NULL, video_size, PROT_READ | PROT_WRITE, MAP_SHARED, overlay_fd, 0);
 
         if (buffer != MAP_FAILED) {
-            qDebug(category) << "mtv-system: Success! Kernel memory mapped via mmap";
-            /*
-            qDebug(category) << "mtv-system: Total buffer size: " << video_size << "bytes";
-            qDebug(category) << "mtv-system: Buffer START address:" << static_cast<void*>(buffer);
-            qDebug(category) << "mtv-system: Buffer END address:  " << static_cast<void*>(buffer + video_size);
-            */
-
+                qCDebug(category) << ANSI_MAGENTA << "Success! Kernel memory mapped via mmap"  << ANSI_RESET;
             // Инициализация FPS-таймера на частоту обновления экрана (~60 Гц)
             fps_timer = new QTimer(this);
             connect(fps_timer, &QTimer::timeout, this, &PbxMtvSystem::slot_fps_hardware_trigger);
             fps_timer->setInterval(16); // 16 миллисекунд
             fps_timer->start();
         } else {
-            qCritical(category) << "mtv-system: critical error mmap! Cause:" << strerror(errno);
+            qCritical(category) << ANSI_RED << "mtv-system: critical error mmap! Cause:" << strerror(errno) << ANSI_RESET;
         }
     } else {
-        qCritical(category) << "mtv-system: Can't open /dev/mtv-overlay! Error:" << strerror(errno);
+        qCritical(category) << ANSI_RED << "mtv-system: Can't open /dev/mtv-overlay! Error:" << strerror(errno) << ANSI_RESET;
     }
 }
-
-
-/*void PbxMtvSystem::init_overlay_memory() {
-    int fd = open("/dev/mtv-overlay", O_RDWR);
-    if (fd >= 0) {
-        // Теперь компилятор знает все флаги и успешно соберет Zero-Copy маппинг
-        buffer = (char*)mmap(NULL, 1920*1080*3, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
-        close(fd);
-        
-        if (buffer == MAP_FAILED) {
-            qCritical(category) << "critical error: mmap of buffers FPGA return MAP_FAILED!";
-        } else {
-            qDebug(category) << "Success! Kernel memory mapped to Userspace at:" << static_cast<void*>(buffer);
-        }
-    } else {
-        qCritical(category) << "Failed to open /dev/mtv-overlay for mmap! Error:" << strerror(errno);
-    }
-}*/
 
 
 /*Реализуйте функцию триггера, которая будет непрерывно кормить FPGA данными:*/
@@ -1384,10 +1338,10 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
     int ioctl_buffer_idx = this->current_buffer_index;
     int result = ioctl(this->overlay_fd, 0x40046D0E, &ioctl_buffer_idx);
     if (result < 0) {
-        qCritical() << "Failed to execute IOCTL FLIP! Error code:" << errno;
+        qCritical(category) << ANSI_RED << "Failed to execute IOCTL FLIP! Error code:" << errno << ANSI_RESET;
         return;
     }
-    qDebug(category) << "current_idx" << this->current_buffer_index;
+//     qDebug(category) << "current_idx" << this->current_buffer_index;
 }
 
 // Быстрый путь для мелких, часто меняющихся элементов (секундная стрелка,
@@ -1413,15 +1367,15 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y)
     timer.start();  
 
     if (!image) {
-        qCritical() << "CRITICAL ERROR: QImage pointer is NULL!";
+        qCritical(category) << ANSI_RED << "CRITICAL ERROR: QImage pointer is NULL!" << ANSI_RESET;
         return;
     }
     if (!buffer) {
-        qCritical() << "CRITICAL ERROR: Output buffer pointer is NULL!";
+        qCritical(category) << ANSI_RED << "CRITICAL ERROR: Output buffer pointer is NULL!" << ANSI_RESET;
         return;
     }
     if (image->format() != QImage::Format_ARGB32 && image->format() != QImage::Format_RGB32) {
-        qCritical() << "WARNING: QImage format is not ARGB32/RGB32! Current format:" << image->format();
+        qCritical(category) << ANSI_RED << "WARNING: QImage format is not ARGB32/RGB32! Current format:" << image->format() << ANSI_RESET;
     }
 
     // Выравниваем offset_x вниз до чётного - сетка макропикселей Cb/Y/A/Cr/Y/A
@@ -1436,7 +1390,7 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y)
     int img_h = image->height();
 
     if ((aligned_offset_x + img_w) > 1920 || (offset_y + img_h) > 1080) {
-        qCritical() << "CRITICAL ERROR: Image with offsets goes out of Full HD bounds!";
+        qCritical(category) << ANSI_RED << "CRITICAL ERROR: Image with offsets goes out of Full HD bounds!";
         return;
     }
 
@@ -1451,7 +1405,19 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y)
 
         convert_line(image, y, img_w, current_row_with_offset);
     }
-    qDebug(category) << "mtvsystem->draw_overlay_fast();" << timer.elapsed() << "milliseconds" << "current_idx" << this->current_buffer_index;
+    
+    int64_t current_elapsed = timer.elapsed();
+    // Выводим лог только если время изменилось по сравнению с прошлым кадром
+        if (current_elapsed != last_elapsed_time && !current_elapsed == 0 ) {
+                qCDebug(category) << ANSI_MAGENTA << "draw_overlay_fast();" << ANSI_RESET
+                                << current_elapsed << "milliseconds" 
+                                << ANSI_MAGENTA "\tcurrent_idx" << ANSI_RESET
+                                << this->current_buffer_index;
+                // qDebug(category) << "mtvsystem->draw_overlay_fast();" 
+                //                 << current_elapsed << "milliseconds" 
+                //                 << "current_idx" << this->current_buffer_index;                                
+                last_elapsed_time = current_elapsed; // Запоминаем новое значение
+        }
     // ioctl FLIP осознанно не делаем - buffer index не меняем.
 }
 

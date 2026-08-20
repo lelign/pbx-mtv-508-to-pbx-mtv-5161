@@ -27,6 +27,11 @@
 
 #define CASCADE_NUM 4 // кол-во блоков в каскаде
 
+#define ANSI_GREEN  "\033[32m" //colorised output
+#define ANSI_RESET  "\033[0m"
+
+#include <vector>
+
 class Layout : public QObject
 {
     Q_OBJECT
@@ -202,9 +207,9 @@ public:
     Cascade_ctrl    *cascade_ctrl[CASCADE_NUM];
 
     solo_mode_t solo_mode;
-    scte_104_splice_t   scte_104_splice[8];
-    layout_object_t     layout_object[(CASCADE_NUM + 1) * 8];
-    label_cell_t        label_cell[(CASCADE_NUM + 1) * 8];
+    scte_104_splice_t   scte_104_splice[16];
+    layout_object_t     layout_object[(CASCADE_NUM + 1) * 16];
+    label_cell_t        label_cell[(CASCADE_NUM + 1) * 16];
     clock_cell_t        clock_cell;
     teletext_cell_t     teletext_cell;
     time_counter_cell_t time_counter_cell;
@@ -219,8 +224,8 @@ public:
     int                 hdmi_color;
     int grid;               // размер сетки (3x3, 4x4, 5x5, 6x6)
     int width_grid, height_grid;
-    int op47[8];
-    int op47_latch[8];
+    int op47[16];
+    int op47_latch[16];
 
     void cell(QImage &image, QRect boundary, QColor color, QString text);
 
@@ -331,6 +336,24 @@ private:
     QImage full_overlay_frame;   // общий кадр 1920x1080, накапливает все элементы
     void blit_to_frame(QImage *image, int x, int y);
     void flush_overlay();
+
+    // 1. Объявляем структуру
+    struct BlitArgs {
+        int x;
+        int y;
+        int width;
+        int height;
+
+        bool operator==(const BlitArgs& other) const {
+            return x == other.x && y == other.y && width == other.width && height == other.height;
+        }
+    }; // !!! ВОТ ЭТУ СКОБКУ С ТОЧКОЙ В НАЧАЛЕ ВЫ ПРОПУСТИЛИ !!!
+
+    // 2. Теперь объявляем члены самого класса Layout
+    void flush_blit_logs(); 
+    std::vector<BlitArgs> current_frame_args;  // Теперь принадлежит Layout
+    std::vector<BlitArgs> last_printed_args;   // Теперь принадлежит Layout
+
 
 signals:
     void signal_solo(solo_mode_t solo_mode);

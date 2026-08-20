@@ -9,6 +9,7 @@
 
 cd build; cmake ..; make -j $(nproc)
 cd ..; rm -rf build; mkdir build && cd build; cmake ..; make -j $(nproc)
+scp -P 2222 pbx-mtv-5161 root@192.168.5.114:/home/root/
 
 # tar archive:
 tar -cvzf ~/poky-socfpga/poky/layers/meta-customer/recipes-customer/application_26_05/files/pbx-mtv-5161-$(date +"v%d%m-%H-%M").tar.gz -C ../ .
