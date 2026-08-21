@@ -34,7 +34,7 @@ public:
                 int y;
                 int enable;
         } image_config_t;
-        image_config_t image_config[8];
+        image_config_t image_config[16];
 
         void draw_overlay(QImage * image);
         // void draw_overlay(QImage * image, int offset_x, int offset_y);
@@ -61,7 +61,7 @@ public:
 private:
         QTimer sdi_format_timer;
         QTimer sdi_format_notify_timer;
-        int sdi_format[8];
+        int sdi_format[16];
         char * buffer;
         int dei;
         QTimer reconfigure_timer;

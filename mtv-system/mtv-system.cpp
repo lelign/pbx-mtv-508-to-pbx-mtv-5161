@@ -117,6 +117,14 @@ enum {
         REG_FRAMEBUFFER_5,
         REG_FRAMEBUFFER_6,
         REG_FRAMEBUFFER_7,
+        REG_FRAMEBUFFER_8,
+        REG_FRAMEBUFFER_9,
+        REG_FRAMEBUFFER_10,
+        REG_FRAMEBUFFER_11,
+        REG_FRAMEBUFFER_12,
+        REG_FRAMEBUFFER_13,
+        REG_FRAMEBUFFER_14,
+        REG_FRAMEBUFFER_15,
         REG_SDI_ADAPTER,
         REG_CVI_0,
         REG_SCALER_0,
@@ -134,6 +142,22 @@ enum {
         REG_SCALER_6,
         REG_CVI_7,
         REG_SCALER_7,
+        REG_CVI_8,
+        REG_SCALER_8,
+        REG_CVI_9,
+        REG_SCALER_9,
+        REG_CVI_10,
+        REG_SCALER_10,
+        REG_CVI_11,
+        REG_SCALER_11,
+        REG_CVI_12,
+        REG_SCALER_12,
+        REG_CVI_13,
+        REG_SCALER_13,
+        REG_CVI_14,
+        REG_SCALER_14,
+        REG_CVI_15,
+        REG_SCALER_15,
         REG_BUILDID,
         REG_BARS,
         REG_AUDIO_SELECTOR, 
@@ -145,6 +169,14 @@ enum {
         REG_MOTION_5,
         REG_MOTION_6,
         REG_MOTION_7,
+        REG_MOTION_8,
+        REG_MOTION_9,
+        REG_MOTION_10,
+        REG_MOTION_11,
+        REG_MOTION_12,
+        REG_MOTION_13,
+        REG_MOTION_14,
+        REG_MOTION_15,
         REG_DEI,
         REG_SDI_CVO,
 };
@@ -160,6 +192,14 @@ QList <QString> enumlist = {
         "REG_FRAMEBUFFER_5",
         "REG_FRAMEBUFFER_6",
         "REG_FRAMEBUFFER_7",
+        "REG_FRAMEBUFFER_8",
+        "REG_FRAMEBUFFER_9",
+        "REG_FRAMEBUFFER_10",
+        "REG_FRAMEBUFFER_11",
+        "REG_FRAMEBUFFER_12",
+        "REG_FRAMEBUFFER_13",
+        "REG_FRAMEBUFFER_14",
+        "REG_FRAMEBUFFER_15",
         "REG_SDI_ADAPTER",
         "REG_CVI_0",
         "REG_SCALER_0",
@@ -177,6 +217,22 @@ QList <QString> enumlist = {
         "REG_SCALER_6",
         "REG_CVI_7",
         "REG_SCALER_7",
+        "REG_CVI_8",
+        "REG_SCALER_8",
+        "REG_CVI_9",
+        "REG_SCALER_9",
+        "REG_CVI_10",
+        "REG_SCALER_10",
+        "REG_CVI_11",
+        "REG_SCALER_11",
+        "REG_CVI_12",
+        "REG_SCALER_12",
+        "REG_CVI_13",
+        "REG_SCALER_13",
+        "REG_CVI_14",
+        "REG_SCALER_14",
+        "REG_CVI_15",
+        "REG_SCALER_15",
         "REG_BUILDID",
         "REG_BARS",
         "REG_AUDIO_SELECTOR", 
@@ -188,6 +244,14 @@ QList <QString> enumlist = {
         "REG_MOTION_5",
         "REG_MOTION_6",
         "REG_MOTION_7",
+        "REG_MOTION_8",
+        "REG_MOTION_9",
+        "REG_MOTION_10",
+        "REG_MOTION_11",
+        "REG_MOTION_12",
+        "REG_MOTION_13",
+        "REG_MOTION_14",
+        "REG_MOTION_15",
         "REG_DEI",
         "REG_SDI_CVO"
 };
@@ -527,6 +591,30 @@ void PbxMtvSystem::framebuffer_start(int index, int value)
         case 7:
                 base = REG_FRAMEBUFFER_7;
                 break;
+        case 8:
+                base = REG_FRAMEBUFFER_8;
+                break;
+        case 9:
+                base = REG_FRAMEBUFFER_9;
+                break;
+        case 10:
+                base = REG_FRAMEBUFFER_10;
+                break;
+        case 11:
+                base = REG_FRAMEBUFFER_11;
+                break;
+        case 12:
+                base = REG_FRAMEBUFFER_12;
+                break;
+        case 13:
+                base = REG_FRAMEBUFFER_13;
+                break;
+        case 14:
+                base = REG_FRAMEBUFFER_14;
+                break;
+        case 15:
+                base = REG_FRAMEBUFFER_15;
+                break;
         }
 
         if(value)
@@ -565,8 +653,31 @@ void PbxMtvSystem::framebuffer_reconfigure(int index, int width, int height)
         case 7:
                 base = REG_FRAMEBUFFER_7;
                 break;
+        case 8:
+                base = REG_FRAMEBUFFER_8;
+                break;
+        case 9:
+                base = REG_FRAMEBUFFER_9;
+                break;
+        case 10:
+                base = REG_FRAMEBUFFER_10;
+                break;
+        case 11:
+                base = REG_FRAMEBUFFER_11;
+                break;
+        case 12:
+                base = REG_FRAMEBUFFER_12;
+                break;
+        case 13:
+                base = REG_FRAMEBUFFER_13;
+                break;
+        case 14:
+                base = REG_FRAMEBUFFER_14;
+                break;
+        case 15:
+                base = REG_FRAMEBUFFER_15;
+                break;
         }
-        
 
         reg_write(base, 1, width*height/3);
         reg_write(base, 2, 
@@ -624,6 +735,30 @@ void PbxMtvSystem::scaler_scaler_config(int index, int bypass, int width, int he
         case 7:
                 base = REG_SCALER_7;
                 break;
+        case 8:
+                base = REG_SCALER_8;
+                break;
+        case 9:
+                base = REG_SCALER_9;
+                break;
+        case 10:
+                base = REG_SCALER_10;
+                break;
+        case 11:
+                base = REG_SCALER_11;
+                break;
+        case 12:
+                base = REG_SCALER_12;
+                break;
+        case 13:
+                base = REG_SCALER_13;
+                break;
+        case 14:
+                base = REG_SCALER_14;
+                break;
+        case 15:
+                base = REG_SCALER_15;
+                break;
         }
 
         if(out_height==0 || out_width==0)
@@ -676,8 +811,32 @@ void PbxMtvSystem::scaler_coeff(int index, uint32_t * coeff)
         case 7:
                 base = REG_SCALER_7;
                 break;
+        case 8:
+                base = REG_SCALER_8;
+                break;
+        case 9:
+                base = REG_SCALER_9;
+                break;
+        case 10:
+                base = REG_SCALER_10;
+                break;
+        case 11:
+                base = REG_SCALER_11;
+                break;
+        case 12:
+                base = REG_SCALER_12;
+                break;
+        case 13:
+                base = REG_SCALER_13;
+                break;
+        case 14:
+                base = REG_SCALER_14;
+                break;
+        case 15:
+                base = REG_SCALER_15;
+                break;
         }
-        
+
         for(unsigned int i=0; i<32; i++){
                 reg_write(base, 10, coeff[i*3+0]);
                 reg_write(base, 11, coeff[i*3+1]);
@@ -1559,7 +1718,8 @@ int PbxMtvSystem::read_sdi_format(int index)
 void PbxMtvSystem::sdi_format_timeout()
 {
     int state_change = 0;
-        for(int i=0; i<8; i++){
+        // for(int i=0; i<8; i++){
+        for(int i=0; i<16; i++){  // segmentation fault if 16 in.h  image_config_t image_config[16]; int sdi_format[16];
                 int new_format = read_sdi_format(i);
                 int changed = new_format!=sdi_format[i];
                 sdi_format[i] = new_format;
@@ -1678,6 +1838,30 @@ void PbxMtvSystem::cvi_configure(int index, int down3g)
                 break;
         case 7:
                 base = REG_CVI_7;
+                break;
+        case 8:
+                base = REG_CVI_8;
+                break;
+        case 9:
+                base = REG_CVI_9;
+                break;
+        case 10:
+                base = REG_CVI_10;
+                break;
+        case 11:
+                base = REG_CVI_11;
+                break;
+        case 12:
+                base = REG_CVI_12;
+                break;
+        case 13:
+                base = REG_CVI_13;
+                break;
+        case 14:
+                base = REG_CVI_14;
+                break;
+        case 15:
+                base = REG_CVI_15;
                 break;
         }
 
@@ -1814,6 +1998,30 @@ int PbxMtvSystem::get_motion(int index)
                 break;
         case 7:
                 base = REG_MOTION_7;
+                break;
+        case 8:
+                base = REG_MOTION_8;
+                break;
+        case 9:
+                base = REG_MOTION_9;
+                break;
+        case 10:
+                base = REG_MOTION_10;
+                break;
+        case 11:
+                base = REG_MOTION_11;
+                break;
+        case 12:
+                base = REG_MOTION_12;
+                break;
+        case 13:
+                base = REG_MOTION_13;
+                break;
+        case 14:
+                base = REG_MOTION_14;
+                break;
+        case 15:
+                base = REG_MOTION_15;
                 break;
         }
 
