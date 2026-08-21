@@ -5,12 +5,15 @@ project(PBXMTV508 CXX C)
 # Настройки стандарта C++
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# заглушить <note> при сборке
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
 
 # Настройки для Qt
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
+
 
 # Настройка путей для модулей CMake
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules")
@@ -92,6 +95,8 @@ add_executable(pbx-mtv-5161
     vgpi_api/vgpi_api.cpp
     remote_ctrl_preset/remote_ctrl_preset.cpp
 )
+
+#
 
 # Индивидуальные макросы для конкретной цели
 target_compile_definitions(pbx-mtv-5161 PRIVATE 
