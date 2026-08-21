@@ -72,7 +72,7 @@ static QLoggingCategory successCategory("SUCCESS"); // Будет обрабат
 Sn75dp159::Sn75dp159(uint8_t i2c_addr){
     sn75_Mode = QCoreApplication::arguments().contains("--sn75");
     if (sn75_Mode) {
-        qCInfo(infoCategory) << "initialization sn159dp on " << i2c_filename_sn75dp << "addr" << hex << i2c_addr;
+        qCInfo(infoCategory) << "initialization sn159dp on " << i2c_filename_sn75dp << "addr" << Qt::hex << i2c_addr;
     }
     
     sn75dp_addr = i2c_addr;
@@ -90,13 +90,13 @@ Sn75dp159::~Sn75dp159(){
 
 void Sn75dp159::sn75dp159_write(uint8_t reg_addr, uint8_t reg_data){
     int ret = sn75dp_i2c->write(sn75dp_addr, reg_addr, reg_data);
-    if (ret == -1) qCWarning(warningCategory) << "sn75dp159_write i2c error"<< hex << sn75dp_addr;
+    if (ret == -1) qCWarning(warningCategory) << "sn75dp159_write i2c error"<< Qt::hex << sn75dp_addr;
 }
 
 void Sn75dp159::sn75dp159_read(uint8_t reg_addr, uint8_t *reg_data){
     int ret = (sn75dp_i2c->read(sn75dp_addr, reg_addr));
     if (ret == -1){
-        qCWarning(warningCategory) << "sn75dp159_read i2c error" << hex << sn75dp_addr;
+        qCWarning(warningCategory) << "sn75dp159_read i2c error" << Qt::hex << sn75dp_addr;
         *reg_data = 0xFF;
     }
     else *reg_data = (uint8_t)ret;
@@ -128,8 +128,8 @@ void Sn75dp159::sn75dp159_device_id_read(){
         } 
         
         // Вывод сырых данных регистров линка
-        qCInfo(infoCategory) << "\nsn75dp159_device_id_read:" << deviceId << "i2c"  << hex << sn75dp_addr <<
-            "Link State 0x1C:" << hex << reg_1C_data << "PLL Config 0x1D:" << hex << reg_1D_data;
+        qCInfo(infoCategory) << "\nsn75dp159_device_id_read:" << deviceId << "i2c"  << Qt::hex << sn75dp_addr <<
+            "Link State 0x1C:" << Qt::hex << reg_1C_data << "PLL Config 0x1D:" << Qt::hex << reg_1D_data;
 
         // --- ИСПРАВЛЕНО: Правильные аппаратные маски Texas Instruments для SN75DP159 ---
         // Бит 7 (0x80) - SIG_DET_CH_CLK: Входящий Pixel Clock от FPGA физически обнаружен
@@ -147,7 +147,7 @@ void Sn75dp159::sn75dp159_device_id_read(){
         } else if (!pll_locked) {
             qCWarning(warningCategory) << "Video clock detected, but PLL failed to LOCK! Signal might be unstable.";
         } else {
-            qCInfo(successCategory) << "SN75DP159 on "<< hex << sn75dp_addr<<" Link is stable. Clock detected and PLL locked.";
+            qCInfo(successCategory) << "SN75DP159 on "<< Qt::hex << sn75dp_addr<<" Link is stable. Clock detected and PLL locked.";
             
             // АВТОМАТИЧЕСКОЕ ПРОБУЖДЕНИЕ: Включаем TMDS линии, если клок и PLL стабильны
             // Регистр 0x09: 0x01 = Активация HDMI режима и открытие выходных каскадов

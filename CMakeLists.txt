@@ -5,6 +5,8 @@ project(PBXMTV508 CXX C)
 # Настройки стандарта C++
 set(CMAKE_CXX_STANDARD 14)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+# заглушить <note> при сборке
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wno-psabi")
 
 # Настройки для Qt
 set(CMAKE_INCLUDE_CURRENT_DIR ON)
@@ -123,8 +125,8 @@ add_executable(rgbyuv-test rgbyuv-test/rgbyuv-test.cpp)
 target_link_libraries(rgbyuv-test PRIVATE Qt5::Widgets)
 
 # --- Исполняемый файл 2: qt-apt ---
-add_executable(qt-app qt-app/qt-app.cpp)
-target_link_libraries(qt-app PRIVATE Qt5::Widgets)
+#add_executable(qt-app qt-app/qt-app.cpp)
+#target_link_libraries(qt-app PRIVATE Qt5::Widgets)
 
 # --- Исполняемый файл 3: read_mem ---
 # add_executable(read_mem read_mem/read_mem.cpp)

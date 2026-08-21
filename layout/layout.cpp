@@ -744,7 +744,7 @@ int Layout::draw_text_icon(QImage &image,  QRect panel, QString text)
 void Layout::draw_old_style_text_panel(QImage &image,  QRect panel, QFont font, QString text)
 {
      QFontMetrics fm(font);
-     float factor = (float)panel.width() / (float)fm.width(text);
+     float factor = (float)panel.width() / (float)fm.horizontalAdvance(text);
 
      if(factor < 1) // уменьшать текст если он шире окна
         font.setPointSize(font.pointSize() * factor - 1);
@@ -764,7 +764,7 @@ void Layout::draw_transparant_text_panel(QImage &image,  QRect panel, int FontSi
 
     QFont font(QFont("Roboto", FontSize, QFont::Normal));
     QFontMetrics fm(font);
-    float factor = (float)panel.width() / (float)fm.width(text);
+    float factor = (float)panel.width() / (float)fm.horizontalAdvance(text);
     if(factor < 1) // уменьшать текст если он шире окна
        font.setPointSize(font.pointSize() * factor - 1);
 
@@ -2164,7 +2164,7 @@ int width, height;
         label_cell[i].label.font.setFamily("Roboto");
 
         QFontMetrics fm(label_cell[i].label.font);
-        float factor = (float)label_cell[i].label.size.width() / (float)fm.width(label_cell[i].label.text);
+        float factor = (float)label_cell[i].label.size.width() / (float)fm.horizontalAdvance(label_cell[i].label.text);
 
         if(factor < 1) // уменьшать текст если он шире окна
             label_cell[i].label.font.setPointSize(FontSize * factor);
