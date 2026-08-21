@@ -202,9 +202,9 @@ public:
     Cascade_ctrl    *cascade_ctrl[CASCADE_NUM];
 
     solo_mode_t solo_mode;
-    scte_104_splice_t   scte_104_splice[8];
-    layout_object_t     layout_object[(CASCADE_NUM + 1) * 8];
-    label_cell_t        label_cell[(CASCADE_NUM + 1) * 8];
+    scte_104_splice_t   scte_104_splice[16];
+    layout_object_t     layout_object[(CASCADE_NUM + 1) * 16];
+    label_cell_t        label_cell[(CASCADE_NUM + 1) * 16];
     clock_cell_t        clock_cell;
     teletext_cell_t     teletext_cell;
     time_counter_cell_t time_counter_cell;
@@ -219,8 +219,8 @@ public:
     int                 hdmi_color;
     int grid;               // размер сетки (3x3, 4x4, 5x5, 6x6)
     int width_grid, height_grid;
-    int op47[8];
-    int op47_latch[8];
+    int op47[16];
+    int op47_latch[16];
 
     void cell(QImage &image, QRect boundary, QColor color, QString text);
 

@@ -42,8 +42,8 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
 {
     qCDebug(category) << "creating...";
 
-    for(int i = 0; i < 8; i++) op47[i] = 0;
-    for(int i = 0; i < 8; i++) op47_latch[i] = 0;
+    for(int i = 0; i < 16; i++) op47[i] = 0;
+    for(int i = 0; i < 16; i++) op47_latch[i] = 0;
     output_format = OUT_STD_1080i50;
 
     for(uint i = 0; i < SizeOfArray(layout_object); ++i) layout_object[i].tally = 0;
@@ -192,7 +192,7 @@ void Layout::slot_solo_mode_desebled()
 solo_mode_t solo_mode;
 
     solo_mode.enable = 0;
-    solo_mode.input = this->solo_mode.input & 0x07;
+    solo_mode.input = this->solo_mode.input & 0x0F;
 
     emit_signal_solo(solo_mode);
 }
@@ -208,7 +208,7 @@ void Layout::slot_gpio_solo(int input_number)
 {
 solo_mode_t solo_mode;
 
-    if(!cascade.last_slave_device && (input_number == 7)) return ;
+    if(!cascade.last_slave_device && (input_number == 15)) return ;
 
     solo_mode.enable = 1;
     solo_mode.input  = input_number;
@@ -232,10 +232,10 @@ QJsonObject json;
 QJsonObject data_obj;
 
     if(cascade.mode != Layout::CASCADE_SLAVE) return;
-    if(!cascade.last_slave_device && (solo_mode.input == 7) && solo_mode.enable) return;
+    if(!cascade.last_slave_device && (solo_mode.input == 15) && solo_mode.enable) return;
 
     data_obj["enable"] = solo_mode.enable;
-    data_obj["input" ] = cascade.num * 8 + solo_mode.input;
+    data_obj["input" ] = cascade.num * 16 + solo_mode.input;
 
     json["set_solo"] = data_obj;
 
@@ -266,7 +266,7 @@ static int common_alarm_old = -1;
 
     QList<int>level_list = mtvsystem->get_audio_level();
 
-    for(int i_cell = 0; i_cell < 8; i_cell++){
+    for(int i_cell = 0; i_cell < 16; i_cell++){
         check_audio(i_cell, level_list);
         check_freeze(i_cell);
         check_video_loss(i_cell);
@@ -289,7 +289,7 @@ void Layout::check_freeze(int cell_index)
 int error, error_old;
 
     error = 0;
-    int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
     if(layout_object[k].cell.video_alarm.enable){
        error = !mtvsystem->get_motion(cell_index);
 
@@ -363,7 +363,7 @@ QJsonObject json;
 QJsonObject data_obj;
 
     if(cascade.mode != Layout::CASCADE_SLAVE) return;
-    if(!cascade.last_slave_device && (solo_mode.input == 7)) return;
+    if(!cascade.last_slave_device && (solo_mode.input == 15)) return;
 
     data_obj["category"] = category;
     data_obj["message" ] = message;
@@ -393,7 +393,7 @@ void Layout::check_audio(int cell_index, QList<int> level_list)
 int error, error_old;
 
     error = 0;
-    int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
 
     if(layout_object[k].cell.audio_alarm.enable){
         for(int i = 0; i < 4; i++){
@@ -505,8 +505,8 @@ QString Layout::sec_to_TimeStr(qint64 sec_val)
 
 void Layout::draw_alarm_elapsed()
 {
-    for(int index = 0; index < 8; ++index) {
-        int k = cascade.num * 8 + index;
+    for(int index = 0; index < 16; ++index) {
+        int k = cascade.num * 16 + index;
         for(int i = 0; i < layout_object[k].alarm.size(); ++i){
             draw_alarm_label(k, layout_object[k]);
         }
@@ -521,8 +521,8 @@ void Layout::slot_new_format()
     routing_source_video();
     update_alarm();
 
-    for(int i = 0; i < 8; ++i){
-        int k = cascade.num * 8 + i;
+    for(int i = 0; i < 16; ++i){
+        int k = cascade.num * 16 + i;
         layout_object[k].sdi_format_str = mtvsystem->get_sdi_format_str(i);
 
         int state = mtvsystem->get_sdi_status(i);
@@ -537,7 +537,7 @@ int width, height;
 int x, y;
 
     if(!layout_object[addr].screen_plan.enable_video) return;
-    if(cascade.num != (addr >> 3)) return;
+    if(cascade.num != (addr >> 4)) return;
     if(teletext_cell.enable && (addr == 0)) return;
 
     switch(layout_object[addr].cell.umd_display){
@@ -582,7 +582,7 @@ int x, y;
 
 void Layout::update_sdi_format(int index)
 {
-    int k = cascade.num * 8 + index;
+    int k = cascade.num * 16 + index;
     if(!layout_object[k].screen_plan.enable_video) return;
     if(!layout_object[k].cell.sdi_format_display)  return;
     if(teletext_cell.enable && (k == 0)) return;
@@ -689,7 +689,7 @@ void Layout::set_aspect_ratio(QRect &rec, int index)
 {
 const float ratio_4_3 = (float)4 / (float)3;
 
-    int k = cascade.num * 8 + index;
+    int k = cascade.num * 16 + index;
 
     if(!layout_object[k].screen_plan.enable_video) return;
 
@@ -798,7 +798,7 @@ void Layout::draw_transparant_text_panel(QImage &image,  QRect panel, int FontSi
 
 void Layout::disable_all_audio_meters()
 {
-    for(int i = 0; i < 8; ++i) {
+    for(int i = 0; i < 16; ++i) {
         mtvsystem->bars_configure(i, 0, 0, 0, 0, 0, 0);
     }
 }
@@ -809,7 +809,7 @@ void Layout::update_layout()
     gpio->set_mode(gpio_mode);
     cascade_udate();
     draw_overlay();
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         pip_config(i);
     }
 
@@ -819,8 +819,8 @@ void Layout::update_layout()
 
     slot_qpps(); // для быстрого появления часов
 
-    for(int i = 0; i < 8; ++i){
-        int k = cascade.num * 8 + i;
+    for(int i = 0; i < 16; ++i){
+        int k = cascade.num * 16 + i;
         DisplayTALLY(k, layout_object[k].tally);
     }
 }
@@ -828,10 +828,10 @@ void Layout::update_layout()
 
 void Layout::sound_routing()
 {
-    if(cascade.num != (solo_mode.input >> 3))
-        mtvsystem->set_audio_source(7);
+    if(cascade.num != (solo_mode.input >> 4))
+        mtvsystem->set_audio_source(15);
     else
-        mtvsystem->set_audio_source(solo_mode.input & 0x07);
+        mtvsystem->set_audio_source(solo_mode.input & 0x0F);
 }
 
 void Layout::cascade_udate()
@@ -847,27 +847,27 @@ void Layout::cascade_udate()
 
 void Layout::cascade_mode_update()
 /*
- *    8-й вход для режима каскадирования
+ *    16-й вход для режима каскадирования
  */
 {
     if(cascade.mode == STAND_ALONE) return;
-    if(cascade.last_slave_device)   return; // последний в цепочке. 8-й как обычный вход
+    if(cascade.last_slave_device)   return; // последний в цепочке. 16-й как обычный вход
 
-    // 8-й вход на весь экран
-    mtvsystem->configure_image(7, 1920, 1080, 0, 0, 1);
+    // 16-й вход на весь экран
+    mtvsystem->configure_image(15, 1920, 1080, 0, 0, 1);
 }
 
 
 void Layout::routing_source_video()
 {
-static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+static int format[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         if(format[i] != mtvsystem->get_sdi_format(i)){
             format[i] = mtvsystem->get_sdi_format(i);
             pip_config(i);
             update_sdi_format(i);
-            if(i == 7) cascade_mode_update(); // чтобы не дёргался вход 8
+            if(i == 15) cascade_mode_update(); // чтобы не дёргался вход 8
         }
     }
     qDebug() << "routing_source_video";
@@ -907,7 +907,7 @@ void Layout::set_audio_meter_position(int index)
 int enable_1, enable_2;
 int x1, x2;
 
-    int k = cascade.num * 8 + index;
+    int k = cascade.num * 16 + index;
 
     int left   = layout_object[k].screen_plan.cell.left();
     int right  = layout_object[k].screen_plan.cell.right();
@@ -952,8 +952,8 @@ int x1, x2;
 
 QString Layout::sdi_key_name(int i)
 {
-    int major = (i >>   3) + 1;
-    int minor = (i & 0x07) + 1;
+    int major = (i >> 4) + 1;
+    int minor = (i & 0x0F) + 1;
     return QString("%1.%2").arg(major).arg(minor);
 }
 
@@ -1084,16 +1084,16 @@ QString Layout::get_preset_file_name(int preset_num)
 }
 
 void Layout::preset_Layout_Read(int preset_num){
-const int x[] = { 0, 1, 2, 0, 1, 2, 0, 1};
-const int y[] = { 0, 0, 0, 1, 1, 1, 2, 2};
+const int x[] = { 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3, 0, 1, 2, 3};
+const int y[] = { 0, 0, 0, 0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 3, 3};
 
     QString file_name = get_preset_file_name(preset_num);
 
     QSettings settings(QSettings::SystemScope, file_name); // settings init
 
     for(uint i = 0; i < SizeOfArray(layout_object); ++i){
-        int k = i & 0x07;
-        int enable = i < 8;
+        int k = i & 0x0F;
+        int enable = i < 16;
         QString name_group = "cell_" + QString::number(i);
         settings.beginGroup(name_group);
             layout_object[i].cell.border_color       = settings.value("border_color",             0).toInt();
@@ -1133,11 +1133,11 @@ const int y[] = { 0, 0, 0, 1, 1, 1, 2, 2};
     }
 
     settings.beginGroup("common_setting");
-        grid   = settings.value("grid",   GRID_3x3).toInt();
+        grid   = settings.value("grid",   GRID_4x4).toInt();
     settings.endGroup();
 
     settings.beginGroup("clock_cell");
-        clock_cell.enable      = settings.value("enable",         1).toInt();
+        clock_cell.enable      = settings.value("enable",         0).toInt();
         clock_cell.scale_x     = settings.value("scale_x",        0).toInt();
         clock_cell.scale_y     = settings.value("scale_y",        0).toInt();
         clock_cell.x           = settings.value("x",              2).toInt();
@@ -1335,19 +1335,19 @@ QImage Layout::get_layout()
     set_clock_plane();
 
     if(STAND_ALONE < cascade.mode && cascade.mode < CASCADE_SLAVE)
-        layout_object[7].cell.enable = 0;
+        layout_object[15].cell.enable = 0;
 
     QImage image(1920, 1080, QImage::Format_ARGB32);
 
-    for(int i = 0; i < 8; ++i){
-        int k = cascade.num * 8 + i;
+    for(int i = 0; i < 16; ++i){
+        int k = cascade.num * 16 + i;
         layout_object[k].screen_plan.enable_video = layout_object[k].cell.enable;
         if(layout_object[k].screen_plan.enable_video)
             draw_layout_object(image, layout_object[k]);
     }
 
-    for(int i = 0; i < 8; ++i){
-        int k = cascade.num * 8 + i;
+    for(int i = 0; i < 16; ++i){
+        int k = cascade.num * 16 + i;
         if(label_cell[k].enable)
             draw_label_object(image, label_cell[k]);
     }
@@ -1796,16 +1796,16 @@ void Layout::DisplayTALLY(int addr, int tally)
 {
     if(!layout_object[addr].screen_plan.enable_video) return;
 
-    if(cascade.num == (addr >> 3)){
-        slot_TALLY(addr & 0x07, tally);
+    if(cascade.num == (addr >> 4)){
+        slot_TALLY(addr & 0x0F, tally);
     }
 }
 
 void Layout::slot_TALLY(int input, int state)
 {
-    if(!cascade.last_slave_device && (input == 7)) return ;
+    if(!cascade.last_slave_device && (input == 15)) return ;
 
-    int k = cascade.num * 8 + input;
+    int k = cascade.num * 16 + input;
     layout_object[k].tally = state;
 
     if(!layout_object[k].screen_plan.enable_video) return;
@@ -1989,7 +1989,7 @@ void Layout::draw_TALLY_frame(QImage &image, QColor color, QRect boundary)
 
 void Layout::pip_config(int i)
 {
-    int k = cascade.num * 8 + i;
+    int k = cascade.num * 16 + i;
     QRect pip = layout_object[k].screen_plan.plane_video;
     int router_source = layout_object[k].cell.input;
     int enable = layout_object[k].screen_plan.enable_video;
@@ -2031,14 +2031,14 @@ QImage Layout::get_layout_1x1(int index)
     QRect cell(0, 0, image.width(), image.height());
     set_teletext_plane(cell);
 
-    for(int i = 0; i < 8; ++i){
-        int k = cascade.num * 8 + i;
+    for(int i = 0; i < 16; ++i){
+        int k = cascade.num * 16 + i;
         layout_object[k].screen_plan.enable_video = 0;
     }
 
-    if((index >> 3) != cascade.num) return image;
+    if((index >> 4) != cascade.num) return image;
 
-    int k = cascade.num * 8 + (index & 0x07);
+    int k = cascade.num * 16 + (index & 0x0F);
     layout_object[k].screen_plan.enable_video = 1;
     layout_object[k].screen_plan.cell = cell;
     layout_object[k].screen_plan.plane_video = cell;
@@ -2271,7 +2271,7 @@ void Layout::check_video_loss(int cell_index)
 {
 int error, error_old;
 
-    int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
 
     if(!mtvsystem->get_sdi_status(cell_index))
         error = 1;
@@ -2330,17 +2330,17 @@ int cascade_num, input;
 /*---------------------------------------------------------------------------*/
 void Layout::update_alarm()
 {
-static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+static int format[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         if(format[i] != mtvsystem->get_sdi_format(i)){
             format[i] = mtvsystem->get_sdi_format(i);
 
             if(mtvsystem->get_sdi_status(i)){
                 QString str, state_str;
 
-                if((cascade.mode > STAND_ALONE) && (i == 7) && !cascade.last_slave_device)
-                    continue;   // Не писать в журнал формат 8-го входа
+                if((cascade.mode > STAND_ALONE) && (i == 15) && !cascade.last_slave_device)
+                    continue;   // Не писать в журнал формат 16-го входа
 
                 state_str = mtvsystem->get_sdi_format_str(i);;
                 eventlog_add_input_state("Video Input %1: " + state_str, i);
@@ -2411,9 +2411,9 @@ QImage Layout::fast_scale(QImage image, int width, int height)
 
 void Layout::slot_update_op47()
 {
-static int op47_old[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+static int op47_old[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         if(op47_latch[i])
             op47[i] = 1;
         else
@@ -2424,7 +2424,7 @@ static int op47_old[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
     if(op47_old[0] != op47[0]) clean_teletext_image(0); // телетекст отображается только в первом окне
 
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         if(op47_old[i] != op47[i]){
             op47_old[i] = op47[i];
             display_op47_icons(i);
@@ -2438,14 +2438,14 @@ static int op47_old[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
 void Layout::scte_104_update()
 {
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         display_scte_104(i);
     }
 }
 
 void Layout::display_scte_104(int index)
 {
-    int k = cascade.num * 8 + index;
+    int k = cascade.num * 16 + index;
 
     if(!layout_object[k].screen_plan.enable_video) return;
     if(!layout_object[k].cell.scte_104_display)    return;
@@ -2485,7 +2485,7 @@ void Layout::display_scte_104(int index)
 
 void Layout::display_text_icons(QImage &image, QRect panel, int cell_index)
 {
-    int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
     if(!layout_object[k].screen_plan.enable_video) return;
 
     if((k == 0) & teletext_cell.enable) return;
@@ -2507,7 +2507,7 @@ void Layout::display_text_icons(QImage &image, QRect panel, int cell_index)
 
 void Layout::display_op47_icons(int cell_index)
 {
-    int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
     QRect panel = layout_object[k].screen_plan.panel_text_icons;
 
     QImage image_text_icons(panel.width(), panel.height(), QImage::Format_ARGB32);

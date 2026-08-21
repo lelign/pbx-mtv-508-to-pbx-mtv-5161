@@ -652,8 +652,8 @@ int cascade_num = 0;
         get_int_value(cascade_settings_obj, "cascade_num",  cascade_num);
 
         get_Json_Array(cascade_settings_obj, "sdi_format", jsonArray);
-        for(int i = 0; i < 8; i++){
-            int k = cascade_num * 8 + i;
+    for(int i = 0; i < 16; i++){
+            int k = cascade_num * 16 + i;
             layout->layout_object[k].sdi_format_str = jsonArray[i].toString();
             }
     }

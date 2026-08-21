@@ -63,7 +63,7 @@ void AncReader::process(data_t data)
         sdid = data.buf[2];
         size = data.buf[3];
 
-        if(channel < 8){
+        if(channel < 16){
                 if(size != data.size-1-4){
                         //qCDebug(category) << "Incorrect ANC size"; // ign
                         return;
