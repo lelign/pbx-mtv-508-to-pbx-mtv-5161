@@ -23,7 +23,7 @@ int main(int argc, char *argv[])
         QApplication a(argc, argv);
         
         
-        QCoreApplication::setApplicationVersion(APP_VERSION);
+        // QCoreApplication::setApplicationVersion(APP_VERSION);
         
         QCommandLineParser parser;
         parser.setApplicationDescription("PBX-MTV-5161 application");

@@ -21,7 +21,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules")
 string(TIMESTAMP CURRENT_BUILD_TIME "%m-%d_%H:%M")
 
 # 2. Передаем эту строку в C++ код как макрос APP_VERSION
-add_definitions(-DAPP_VERSION="${CURRENT_BUILD_TIME}")
+#add_definitions(-DAPP_VERSION="${CURRENT_BUILD_TIME}")
 
 # Настройка флагов компилятора для разных режимов
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
