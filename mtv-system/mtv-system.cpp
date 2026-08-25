@@ -1611,7 +1611,14 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y)
 
         convert_line(image, y, img_w, current_row_with_offset);
     }
-    qDebug(category) << "mtvsystem->draw_overlay_fast();" << timer.elapsed() << "milliseconds" << "current_idx" << this->current_buffer_index;
+
+//     qDebug(category) << "mtvsystem->draw_overlay_fast();" << timer.elapsed() << "milliseconds" << "current_idx" << this->current_buffer_index;
+    int64_t current_elapsed = timer.elapsed();
+    if (current_elapsed != last_elapsed_time && current_elapsed != 0) {
+        qCDebug(category) << ANSI_MAGENTA << "draw_overlay_fast();" << ANSI_RESET << current_elapsed << "ms";
+        last_elapsed_time = current_elapsed;
+    }
+
     // ioctl FLIP осознанно не делаем - buffer index не меняем.
 }
 
