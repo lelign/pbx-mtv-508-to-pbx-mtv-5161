@@ -142,7 +142,7 @@ void Sn75dp159::sn75dp159_device_id_read()
         }
 
         // Вывод сырых данных регистров линка
-        qCInfo(infoCategory) << "\nsn75dp159_device_id_read:" << deviceId << "i2c" << Qt::hex << sn75dp_addr << "Link State 0x1C:" << Qt::hex << reg_1C_data << "PLL Config 0x1D:" << hex << reg_1D_data;
+        qCInfo(infoCategory) << "\nsn75dp159_device_id_read:" << deviceId << "i2c" << Qt::hex << sn75dp_addr << "Link State 0x1C:" << Qt::hex << reg_1C_data << "PLL Config 0x1D:" << Qt::hex << reg_1D_data;
 
         // --- ИСПРАВЛЕНО: Правильные аппаратные маски Texas Instruments для SN75DP159 ---
         // Бит 7 (0x80) - SIG_DET_CH_CLK: Входящий Pixel Clock от FPGA физически обнаружен

@@ -364,14 +364,6 @@ private:
     QTimer *m_timer;
     QList<double> m_channelLevels;
 
-    void draw_message_box_overlay();
-
-    int m_fileCheckCounter = 0; // Переменная для пропуска тактов таймера
-    QImage m_cachedTextImage;    // Кэш для картинки с текстом (message.txt)
-    QString m_lastCachedMessage; // Сюда пишем текст, чтобы знать, изменился ли файл
-
-    QImage m_darkBlankImage; // Маленькая заглушка для фильтрации luma
-
 
 private slots:
     // Вызывается таймером каждые 100 мс

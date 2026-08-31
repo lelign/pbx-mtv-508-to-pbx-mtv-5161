@@ -87,7 +87,6 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
 
     timer_analog_clock.start(50); // 10 (20) Гц — достаточно, чтобы секундная стрелка выглядела "скользящей"
     connect(&timer_analog_clock, &QTimer::timeout, this, &Layout::slot_draw_analog_clock_tick);
-    
 
     ini_alarm_time_threshold();
     hdmi_color = 1;
@@ -98,17 +97,12 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     }
 
     // Настраиваем таймер на 100 мс
-
-
-    
-    // m_timer = new QTimer(this);
-    
-    // m_timer->start(500);
-    // connect(m_timer, &QTimer::timeout, this, &Layout::updateMeterRoutine);
-    // m_timer->start(100); // switch off audio_meter
+    m_timer = new QTimer(this);
+    connect(m_timer, &QTimer::timeout, this, &Layout::updateMeterRoutine);
+    m_timer->start(100);
 
     // Первичное чтение данных (эмулятор)
-    //  readAudioLevelsFile();   // switch off audio_meter
+    readAudioLevelsFile();
 
     // qCDebug(category) << ANSI_GREEN << "SizeOfArray(layout_object)" << SizeOfArray(layout_object) << ANSI_RESET;
     // for(uint i = 0; i < SizeOfArray(layout_object); i++){           
@@ -619,7 +613,7 @@ int x, y;
     blit_to_frame(&image_label_panel, x, y);
     qDebug() << "update_label_name_channel";
     // flush_overlay();
-    mtvsystem->draw_overlay_fast(&image_label_panel, x, y, false);
+    mtvsystem->draw_overlay_fast(&image_label_panel, x, y);
 }
 
 void Layout::update_sdi_format(int index)
@@ -642,7 +636,7 @@ void Layout::update_sdi_format(int index)
     int y =layout_object[k].screen_plan.panel_format_video.y();
 
     blit_to_frame(&image_sdi_panel, x, y);
-    mtvsystem->draw_overlay_fast(&image_sdi_panel, x, y, false);
+    mtvsystem->draw_overlay_fast(&image_sdi_panel, x, y);
 }
 
 void Layout::flush_overlay()
@@ -656,6 +650,7 @@ void Layout::flush_overlay()
     // system("devmem2 0xFF200004 w 1");  
     // qDebug(category) << "flush_overlay";
 }
+
 
 void Layout::blit_to_frame(QImage *image, int x, int y)
 {
@@ -1707,7 +1702,7 @@ void Layout::draw_time_counter(label_t label)
     blit_to_frame(&image_time_counter, label.size.x(), label.size.y());
     // Быстрый путь: сразу в активный HW-буфер, не дожидаясь раз-в-секунду flush_overlay().
     // Это и нужно, чтобы десятые доли секунды реально обновлялись на экране 10 раз/сек.
-    mtvsystem->draw_overlay_fast(&image_time_counter, label.size.x(), label.size.y(), false);
+    mtvsystem->draw_overlay_fast(&image_time_counter, label.size.x(), label.size.y());
 }
 
 void Layout::draw_digital_clock()
@@ -1734,7 +1729,7 @@ QString date_str;
     painter.drawText(clock_rec, Qt::AlignCenter, digital_clock_str);
     painter.end();
     blit_to_frame(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
-    mtvsystem->draw_overlay_fast(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y(), false);
+    mtvsystem->draw_overlay_fast(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
 
     QRect date_rec = digital_clock.date_rec;
     date_rec.moveTo(0,0);
@@ -1757,7 +1752,7 @@ QString date_str;
 
     painter_date.drawText(date_rec, Qt::AlignCenter, date_str);
     blit_to_frame(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
-    mtvsystem->draw_overlay_fast(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y(), false);
+    mtvsystem->draw_overlay_fast(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
 
     mtvsystem->overlay_sync();
 }
@@ -1766,31 +1761,8 @@ void Layout::slot_draw_analog_clock_tick()
 {
     // Пока выбран стиль "аналоговые часы" - перерисовываем чаще 1 раза в секунду,
     // чтобы секундная стрелка двигалась плавно, а не "прыжками".
-    // =================================================================
-    // 1. ОПТИМИЗИРОВАННАЯ ПРОВЕРКА ФАЙЛА (Раз в 500 мс вместо 50 мс)
-    // =================================================================
-    m_fileCheckCounter++;
-    if (m_fileCheckCounter >= 40) { // 10 тиков по 50 мс = 500 миллисекунд 40 > 2 sec
-        m_fileCheckCounter = 0;     // Сбрасываем счетчик
-        
-        const QString filePath = "message.txt";
-        // Обновляем флаг в mtvsystem. Обычные виджеты сразу увидят его!
-        mtvsystem->mess_exist = QFile::exists(filePath);
-    }
-
-
     if(!clock_cell.style)
         draw_analog_clock();
-
-    // =================================================================
-    // 3. СИНХРОННЫЙ ВЫВОД ПЛАШКИ ПОВЕРХ ВСЕГО
-    // =================================================================
-    if (mtvsystem->mess_exist) {
-        // Вызываем рисование текста (проверку QFile::exists внутри неё теперь можно удалить!)
-        this->draw_message_box_overlay();
-    }
-
-    
 }
 
 void Layout::draw_analog_clock()
@@ -1875,7 +1847,7 @@ void Layout::draw_analog_clock()
     blit_to_frame(&image_clock, clock_rec.x(),  clock_rec.y());
     // Быстрый путь: сразу в активный HW-буфер (без flip) - FPGA подхватит
     // изменение стрелок в пределах ~16мс благодаря slot_fps_hardware_trigger().
-    mtvsystem->draw_overlay_fast(&image_clock, clock_rec.x(), clock_rec.y(), false);
+    mtvsystem->draw_overlay_fast(&image_clock, clock_rec.x(), clock_rec.y());
 }
 
 
@@ -1975,7 +1947,7 @@ void Layout::draw_TALLY_indicator_old_style(QRect cell, QColor color)
     get_image_TALLY_indicator_old_style(image_tally, tally_cell, color);
 
     blit_to_frame(&image_tally, cell.x(), cell.y());
-    mtvsystem->draw_overlay_fast(&image_tally, cell.x(), cell.y(), false);
+    mtvsystem->draw_overlay_fast(&image_tally, cell.x(), cell.y());
     mtvsystem->overlay_sync();
 }
 
@@ -2066,7 +2038,7 @@ QColor color;
     }
 
     blit_to_frame(&image_tally, tally_rec.x(), tally_rec.y());
-    mtvsystem->draw_overlay_fast(&image_tally, tally_rec.x(), tally_rec.y(), false);
+    mtvsystem->draw_overlay_fast(&image_tally, tally_rec.x(), tally_rec.y());
     mtvsystem->overlay_sync();
 }
 
@@ -2382,7 +2354,7 @@ void Layout::draw_alarm_label(int index, layout_object_t layout_object)
         painter_alarm.setPen(QPen(Qt::white));
         painter_alarm.drawText(alarm_rec, Qt::AlignCenter, alarm_label.at(i).text + elapsed_str);
         blit_to_frame(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
-        mtvsystem->draw_overlay_fast(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y(), false);
+        mtvsystem->draw_overlay_fast(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
         alarm_label_rec.translate(0, offset_h);
     }
 }
@@ -2484,7 +2456,7 @@ void Layout::clean_teletext_image(int channel)
     int y = panel.y();
 
     blit_to_frame(&image_teletext, x, y);
-    mtvsystem->draw_overlay_fast(&image_teletext, x, y, false);
+    mtvsystem->draw_overlay_fast(&image_teletext, x, y);
 }
 
 
@@ -2502,7 +2474,7 @@ void Layout::display_teletext(QImage image_teletext)
     int y = panel.y();
 
     blit_to_frame(&image, x, y);
-    mtvsystem->draw_overlay_fast(&image, x, y, false);
+    mtvsystem->draw_overlay_fast(&image, x, y);
     qDebug() << "display_teletext";
     // flush_overlay();
     // mtvsystem->overlay_sync();
@@ -2603,7 +2575,7 @@ void Layout::display_scte_104(int index)
     int y = panel.y();
 
     blit_to_frame(&image_scte_104, x, y);
-    mtvsystem->draw_overlay_fast(&image_scte_104, x, y, false);
+    mtvsystem->draw_overlay_fast(&image_scte_104, x, y);
 }
 
 
@@ -2643,7 +2615,7 @@ void Layout::display_op47_icons(int cell_index)
     int y =panel.y();
 
     blit_to_frame(&image_text_icons, x, y);
-    mtvsystem->draw_overlay_fast(&image_text_icons, x, y, false);
+    mtvsystem->draw_overlay_fast(&image_text_icons, x, y);
 }
 
 
@@ -2694,29 +2666,30 @@ void Layout::drawSingleBar(QPainter &painter, double level, int x_offset, int y_
     if (level < 0.0) level = 0.0;
     if (level > 1.0) level = 1.0;
 
-    // 1. Темный фон под конкретную полоску
-    painter.fillRect(x_offset, y_offset, width, height, QColor(25, 25, 25));
+   // Задаем темный фон полоски с полупрозрачностью (например, 180 из 255)
+    painter.fillRect(x_offset, y_offset, width, height, QColor(25, 25, 25, 180));
 
     int barHeight = static_cast<int>(height * level);
     int topY = y_offset + (height - barHeight);
 
-    // 2. Активный уровень градиента (Зеленый -> Желтый -> Красный)
     if (barHeight > 0) {
         QLinearGradient gradient(x_offset, y_offset + height, x_offset, y_offset);
-        gradient.setColorAt(0.0, QColor(0, 220, 100)); 
-        gradient.setColorAt(0.7, QColor(240, 200, 0)); 
-        gradient.setColorAt(0.9, QColor(255, 50, 50)); 
+        // Задаем светящиеся индикаторы с легкой прозрачностью (230 из 255), чтобы они выглядели «стеклянными»
+        gradient.setColorAt(0.0, QColor(0, 220, 100, 230)); 
+        gradient.setColorAt(0.7, QColor(240, 200, 0, 230)); 
+        gradient.setColorAt(0.9, QColor(255, 50, 50, 230)); 
 
         QRect activeRect(x_offset, topY, width, barHeight);
         painter.fillRect(activeRect, gradient);
     }
 
     // 3. Светодиодные насечки (горизонтальная сетка)
-    painter.setPen(QColor(15, 15, 15));
+    // Сетка насечек (тоже можно сделать чуть мягче)
+    painter.setPen(QColor(15, 15, 15, 200));
     int segmentHeight = 3;
     int gapHeight = 1;
     for (int y = y_offset; y < y_offset + height; y += (segmentHeight + gapHeight)) {
-        painter.fillRect(x_offset, y, width, gapHeight, QColor(15, 15, 15));
+        painter.fillRect(x_offset, y, width, gapHeight, QColor(15, 15, 15, 200));
     }
 }
 
@@ -2763,8 +2736,17 @@ void Layout::updateMeterRoutine() {
 
     for (int g = 0; g < totalGroups; ++g) {
         // Рисуем подложку-рамку для группы
-        painter.setPen(QColor(40, 40, 44));
-        painter.setBrush(QColor(22, 22, 25));
+        // painter.setPen(QColor(40, 40, 44));
+        // painter.setBrush(QColor(22, 22, 25));
+        // painter.drawRoundedRect(currentX - 4, startY - 6, groupWidth + 8, meterHeight + 12, 4, 4);
+
+
+        // for alpha
+        // И внутри цикла создания групп в updateMeterRoutine():
+        // Измените цвет подложки всей группы (QGroupBox стиль):
+
+        painter.setPen(QColor(40, 40, 44, 255)); // Рамка пусть будет четкой
+        painter.setBrush(QColor(22, 22, 25, 120)); // Фон группы делаем полупрозрачным (120 из 255)
         painter.drawRoundedRect(currentX - 4, startY - 6, groupWidth + 8, meterHeight + 12, 4, 4);
 
         // Рисуем 4 канала внутри этой группы
@@ -2799,7 +2781,7 @@ void Layout::updateMeterRoutine() {
     
     // blit here
     blit_to_frame(&meterImage, destX, destY);
-    mtvsystem->draw_overlay_fast(&meterImage, destX, destY, false);
+    mtvsystem->draw_overlay_fast(&meterImage, destX, destY);
 }
 
 
@@ -2820,82 +2802,4 @@ void Layout::readAudioLevelsFile() {
         m_channelLevels[i] = value;
     }
     file.close();
-
-}
-
-
-void Layout::draw_message_box_overlay()
-{
-    const QString filePath = "message.txt";
-    const int dark_x = 100;
-    const int dark_y = 440;
-    const int dark_w = 1720;
-    const int dark_h = 200;
-
-    // =================================================================
-    // 1. ПРОВЕРКА ОБНОВЛЕНИЯ КЭША
-    // =================================================================
-    QFile file(filePath);
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QTextStream in(&file);
-        QString currentMessage = in.readAll().trimmed();
-        file.close();
-
-        // Если текст изменился (или это первая итерация), перерисовываем кэш
-        if (currentMessage != m_lastCachedMessage) {
-            m_lastCachedMessage = currentMessage;
-
-            if (currentMessage.isEmpty()) {
-                m_cachedTextImage = QImage(); // Сбрасываем кэш, если файл пустой
-            } else {
-                // Инициализируем кэш-картинку
-                m_cachedTextImage = QImage(dark_w, dark_h, QImage::Format_ARGB32);
-                // m_cachedTextImage.fill(Qt::transparent);
-                m_cachedTextImage.fill(QColor(60, 60, 60, 20)); 
-
-                QPainter painter(&m_cachedTextImage);
-                painter.setRenderHint(QPainter::Antialiasing);
-                painter.setRenderHint(QPainter::TextAntialiasing);
-
-                QFont font("Arial", 36, QFont::Bold);
-                painter.setFont(font);
-
-                QFontMetrics metrics(font);
-                int textWidth = metrics.horizontalAdvance(currentMessage);
-                int textHeight = metrics.height();
-
-                int startX = (dark_w - textWidth) / 2;
-                int startY = (dark_h - textHeight) / 2 + metrics.ascent();
-
-                QPainterPath textPath;
-                textPath.addText(startX, startY, font, currentMessage);
-
-                QPen strokePen(Qt::black, 6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-                painter.setPen(strokePen);
-                painter.setBrush(Qt::NoBrush);
-                painter.drawPath(textPath);
-
-                painter.setPen(Qt::NoPen);
-                painter.setBrush(Qt::white);
-                painter.drawPath(textPath);
-                painter.end();
-                
-                qCDebug(category) << "Regenerated message overlay cache for:" << currentMessage;
-            }
-        }
-    } else {
-        if (!m_cachedTextImage.isNull()){
-            m_cachedTextImage = QImage(); // Сброс в null и очистка памяти;
-            slot_new_format();
-        }
-    }
-
-    // =================================================================
-    // 2. БЫСТРЫЙ ВЫВОД ИЗ КЭША
-    // =================================================================
-    if (!m_cachedTextImage.isNull()) {
-        // Выводим уже готовую картинку из оперативной памяти за 0 миллисекунд нагрузки на CPU
-        mtvsystem->draw_overlay_fast(&m_cachedTextImage, dark_x, dark_y, true);
-        
-    }
 }

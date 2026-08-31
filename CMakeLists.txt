@@ -14,7 +14,6 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
-
 # Настройка путей для модулей CMake
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules")
 
@@ -22,7 +21,7 @@ list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake_modules")
 string(TIMESTAMP CURRENT_BUILD_TIME "%m-%d_%H:%M")
 
 # 2. Передаем эту строку в C++ код как макрос APP_VERSION
-add_definitions(-DAPP_VERSION="${CURRENT_BUILD_TIME}")
+#add_definitions(-DAPP_VERSION="${CURRENT_BUILD_TIME}")
 
 # Настройка флагов компилятора для разных режимов
 if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -95,8 +94,6 @@ add_executable(pbx-mtv-5161
     vgpi_api/vgpi_api.cpp
     remote_ctrl_preset/remote_ctrl_preset.cpp
 )
-
-#
 
 # Индивидуальные макросы для конкретной цели
 target_compile_definitions(pbx-mtv-5161 PRIVATE 

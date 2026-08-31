@@ -2850,8 +2850,7 @@ void Layout::draw_message_box_overlay()
             } else {
                 // Инициализируем кэш-картинку
                 m_cachedTextImage = QImage(dark_w, dark_h, QImage::Format_ARGB32);
-                // m_cachedTextImage.fill(Qt::transparent);
-                m_cachedTextImage.fill(QColor(60, 60, 60, 20)); 
+                m_cachedTextImage.fill(Qt::transparent);
 
                 QPainter painter(&m_cachedTextImage);
                 painter.setRenderHint(QPainter::Antialiasing);
@@ -2883,11 +2882,6 @@ void Layout::draw_message_box_overlay()
                 qCDebug(category) << "Regenerated message overlay cache for:" << currentMessage;
             }
         }
-    } else {
-        if (!m_cachedTextImage.isNull()){
-            m_cachedTextImage = QImage(); // Сброс в null и очистка памяти;
-            slot_new_format();
-        }
     }
 
     // =================================================================
@@ -2896,6 +2890,5 @@ void Layout::draw_message_box_overlay()
     if (!m_cachedTextImage.isNull()) {
         // Выводим уже готовую картинку из оперативной памяти за 0 миллисекунд нагрузки на CPU
         mtvsystem->draw_overlay_fast(&m_cachedTextImage, dark_x, dark_y, true);
-        
     }
 }

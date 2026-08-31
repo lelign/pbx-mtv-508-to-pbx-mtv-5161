@@ -1120,16 +1120,18 @@ const int16_t uint8_crcb_b_data[] = {
 //         }
 // }
 
-/*Мы возвращаем в convert_line чтение из m_cachedTextImage, но используем оригинальный указатель.
- Чтобы convert_line знала, где находится текст, мы передаем в неё указатель на картинку сообщения.*/
 
-void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer, bool darken, int screen_x_start, int screen_y, QImage * msgImg) {
+void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer, bool darken, int screen_x_start, int screen_y) {
     uint8_t * dst = buffer;
     const uint8_t * line = img->constScanLine(y);
 
+    // Коэффициенты BT.601
     uint16x8_t y_r = vmovq_n_u16(77); uint16x8_t y_g = vmovq_n_u16(150); uint16x8_t y_b = vmovq_n_u16(29);
     int16x8_t cb_r = vmovq_n_s16(-43); int16x8_t cb_g = vmovq_n_s16(-85); int16x8_t cb_b = vmovq_n_s16(128);
     int16x8_t cr_r = vmovq_n_s16(128); int16x8_t cr_g = vmovq_n_s16(-107); int16x8_t cr_b = vmovq_n_s16(-21);
+
+    // Границы нашей центральной темной зоны
+    const int dark_left = 100, dark_right = 1820, dark_top = 440, dark_bottom = 640;
 
     int x = 0;
     int vector_width = width & ~7; 
@@ -1145,6 +1147,39 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
         y_acc = vmlaq_u16(y_acc, b_u, y_b);
         uint8x8_t y_val = vqshrn_n_u16(y_acc, 8); 
 
+        // Массив множителей для пачки из 8 пикселей (256 = 100% яркости)
+        uint16_t factor_array[8];
+
+        if (darken) {
+            // ЛОГИКА А: Отрисовка самой плашки с текстом
+            uint16x8_t v_alpha16 = vmovl_u8(rgb_data.val[3]);
+            uint16x8_t v_is_text_mask = vcgtq_u16(v_alpha16, vmovq_n_u16(0)); // 0xFFFF где буквы
+            
+            uint16x8_t v_current_factor = vbslq_u16(v_is_text_mask, vmovq_n_u16(256), vmovq_n_u16(128));
+            uint16x8_t y_scaled = vmulq_u16(vmovl_u8(y_val), v_current_factor);
+            y_val = vqshrn_n_u16(y_scaled, 8);
+        } 
+        else if (this->mess_exist && screen_y >= dark_top && screen_y < dark_bottom) {
+            // ЛОГИКА Б: Обычный виджет попал в диапазон плашки по Y при активном сообщении
+            bool needs_scaling = false;
+            for (int i = 0; i < 8; ++i) {
+                int abs_x = screen_x_start + x + i;
+                // Проверяем пересечение по X
+                if (abs_x >= dark_left && abs_x < dark_right) {
+                    factor_array[i] = 128; // Гасим яркость пикселя виджета на 50%
+                    needs_scaling = true;
+                } else {
+                    factor_array[i] = 256; // Оставляем 100% яркости вне плашки
+                }
+            }
+            if (needs_scaling) {
+                uint16x8_t v_current_factor = vld1q_u16(factor_array);
+                uint16x8_t y_scaled = vmulq_u16(vmovl_u8(y_val), v_current_factor);
+                y_val = vqshrn_n_u16(y_scaled, 8);
+            }
+        }
+
+        // Расчет цвета Cb / Cr (без изменений)
         int16x8_t b = vreinterpretq_s16_u16(b_u); int16x8_t g = vreinterpretq_s16_u16(g_u); int16x8_t r = vreinterpretq_s16_u16(r_u);
         int16x8_t cb_acc = vmulq_s16(r, cb_r); cb_acc = vmlaq_s16(cb_acc, g, cb_g); cb_acc = vmlaq_s16(cb_acc, b, cb_b);
         uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
@@ -1152,15 +1187,11 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
         int16x8_t cr_acc = vmulq_s16(r, cr_r); cr_acc = vmlaq_s16(cr_acc, g, cr_g); cr_acc = vmlaq_s16(cr_acc, b, cr_b);
         uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
 
-        uint8x8x2_t cb_pairs = vuzp_u8(cb_val, cb_val); 
-        uint8x8x2_t cr_pairs = vuzp_u8(cr_val, cr_val);
-        uint8x8_t cb_down = vrhadd_u8(cb_pairs.val[0], cb_pairs.val[0]); 
-        uint8x8_t cr_down = vrhadd_u8(cr_pairs.val[0], cr_pairs.val[0]); 
+        uint8x8x2_t cb_pairs = vuzp_u8(cb_val, cb_val); uint8x8x2_t cr_pairs = vuzp_u8(cr_val, cr_val);
+        uint8x8_t cb_down = vrhadd_u8(cb_pairs.val[0], cb_pairs.val[0]); uint8x8_t cr_down = vrhadd_u8(cr_pairs.val[0], cr_pairs.val[0]); 
 
         uint8x8x3_t out_data;
-        out_data.val[0] = vzip_u8(cb_down, cr_down).val[0]; 
-        out_data.val[1] = y_val; 
-        out_data.val[2] = vmov_n_u8(255); // Аппаратная альфа всегда непрозрачна
+        out_data.val[0] = vzip_u8(cb_down, cr_down).val[0]; out_data.val[1] = y_val; out_data.val[2] = rgb_data.val[3]; 
 
         vst3_u8(dst, out_data);
         dst += 24;
@@ -1173,11 +1204,29 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
         int cb_val = (((-43 * pixel[2] - 85 * pixel[1] + 128 * pixel[0]) >> 8) + 128);
         int cr_val = (((128 * pixel[2] - 107 * pixel[1] - 21 * pixel[0]) >> 8) + 128);
 
+        uint8_t alpha = pixel[3];
+        int abs_x = screen_x_start + x;
+
+        if (darken && alpha == 0) {
+            y_val = (y_val * 128) >> 8;
+        } 
+        else if (!darken && this->mess_exist) {
+            if (screen_y >= dark_top && screen_y < dark_bottom && abs_x >= dark_left && abs_x < dark_right) {
+                y_val = (y_val * 128) >> 8; // Затемняем остаточные пиксели виджета
+            }
+        }
+
+        y_val  = std::max(0, std::min(255, y_val));
+        cb_val = std::max(0, std::min(255, cb_val));
+        cr_val = std::max(0, std::min(255, cr_val));
+
         if (x % 2 == 0) *dst++ = cb_val; else *dst++ = cr_val;
-        *dst++ = static_cast<uint8_t>(y_val); 
-        *dst++ = 255;
+        *dst++ = static_cast<uint8_t>(y_val); *dst++ = alpha;
     }
 }
+
+
+
 
 
 //anton ver
@@ -1228,8 +1277,7 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
         uint8_t * current_row_with_offset = row_start_address + (offset_x * 3);
         
         // convert_line(image, y, image->width(), current_row_with_offset);
-        // convert_line(image, y, image->width(), current_row_with_offset, false, aligned_offset_x, screen_y);
-        
+        convert_line(image, y, image->width(), current_row_with_offset, false, aligned_offset_x, screen_y);
         
     }
 
@@ -1261,10 +1309,6 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
 // элемента (клок раз в 100мс) это не должно быть заметно, а на следующем
 // кадре всё уже консистентно. Если это станет проблемой - придётся уходить
 // на shadow-copy back-buffer (см. обсуждение).
-
-/*Запрещаем обычным виджетам писать в зону плашки done*/
-/*при наличии текста плашка снова становится черной, а тайминг прыгает до 1мс -> 6мс -> 1мс -> 6мс
- (это классический симптом двойной буферизации*/
 void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y, bool darken)
 {
     QElapsedTimer timer;
@@ -1284,7 +1328,7 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y, 
 
     // Выравниваем offset_x вниз до чётного - сетка макропикселей Cb/Y/A/Cr/Y/A
     // завязана на пары колонок, и convert_line всегда начинает писать с фазы Cb.
-       int aligned_offset_x = (offset_x / 2) * 2;
+   int aligned_offset_x = (offset_x / 2) * 2;
     if ((aligned_offset_x + image->width()) > 1920 || (offset_y + image->height()) > 1080) return;
 
     int row_stride = 1920 * 3;
@@ -1292,31 +1336,12 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y, 
     int img_h = image->height();
     uint8_t* start_address = reinterpret_cast<uint8_t*>(buffer + (this->current_buffer_index * (video_size / 2)));
 
-    // Координаты темной зоны
-    const int dark_top = 440;
-    const int dark_bottom = 640;
-
     for (int y = 0; y < img_h; ++y) {
         int screen_y = y + offset_y;
-
-        // ИСПРАВЛЕНИЕ: Если это обычный виджет (darken == false) и сообщение активно,
-        // запрещаем ему писать пиксели в диапазон Y нашей плашки.
-        if (!darken && this->mess_exist) {
-            if (screen_y >= dark_top && screen_y < dark_bottom) {
-                continue; // Просто пропускаем эту строку виджета, отдавая приоритет плашке текста!
-            }
-        }
-
         uint8_t * current_row_with_offset = start_address + (screen_y * row_stride) + (aligned_offset_x * 3);
-        // convert_line(image, y, img_w, current_row_with_offset, darken, aligned_offset_x, screen_y);
-        // Внутри PbxMtvSystem::draw_overlay_fast передавайте m_cachedTextImage последним параметром:
-        /*В функции draw_overlay_fast, откуда вызывается convert_line, просто добавьте этот кэш-указатель 
-        в вызов (заменив darken на передачу m_cachedTextImage из вашего класса Layout):*/
-            if (darken) {
-                        m_msgImageCache = image; 
-                }
-        convert_line(image, y, img_w, current_row_with_offset, darken, aligned_offset_x, screen_y, m_msgImageCache);
-
+        
+        // Передаем абсолютную экранную координату X и Y для проверки пересечений
+        convert_line(image, y, img_w, current_row_with_offset, darken, aligned_offset_x, screen_y);
     }
     
     int64_t current_elapsed = timer.elapsed();

@@ -80,8 +80,7 @@ private:
         QImage * image_to_prpb(QImage * image);
         int limit_color(int value);
         // void convert_line(QImage * img, int y, int width, uint8_t * buffer);
-        // void convert_line(QImage * img, int y, int width, uint8_t * buffer, bool darken, int screen_x_start, int screen_y);
-        void convert_line(QImage * img, int y, int width, uint8_t * buffer, bool darken, int screen_x_start, int screen_y, QImage * msgImg);
+        void convert_line(QImage * img, int y, int width, uint8_t * buffer, bool darken, int screen_x_start, int screen_y);
         int read_sdi_format(int index);
         void reconfigure_image(int index);
         video_format_t * get_video_format(int id);
@@ -100,8 +99,6 @@ private:
         bool m_rw; // Флаг для хранения состояния режима read write str-mem disabled
         int current_buffer_index;
         int64_t last_elapsed_time = -1; // чтобы не сыпал в терминал
-
-        QImage* m_msgImageCache = nullptr;
 private slots:
         void slot_fps_hardware_trigger();
 private Q_SLOTS:

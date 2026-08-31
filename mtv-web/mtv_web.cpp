@@ -1174,9 +1174,12 @@ QJsonObject Mtv_web::get_json_hardware_diagnostics()
 QJsonObject Mtv_web::get_json_system()
 {
 QJsonObject sys_obj;
-
-    sys_obj["version_software"   ] = VERSION;
-    sys_obj["build_id"           ] = mtvsystem->get_build_id();;
+    #ifdef APP_VERSION   // сборка из под Yocto
+        sys_obj["version_software"   ] = QString(APP_VERSION);
+    #else               // сборка из под SDK
+        sys_obj["version_software"   ] = VERSION;
+    #endif
+    sys_obj["build_id"           ] = mtvsystem->get_build_id();
 
     return sys_obj;
 }
