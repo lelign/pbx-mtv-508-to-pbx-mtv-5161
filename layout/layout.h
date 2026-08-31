@@ -254,6 +254,8 @@ public:
     Cascade_server  *cascade_server;
     Time_counter    *timer_time_counter;
 
+    QImage q_image_cache_file; // Наш буфер накопления фона подложки
+
 private:
     QImage *image_clock;
     QTimer timer_update_alarm;

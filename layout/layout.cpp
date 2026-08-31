@@ -1770,12 +1770,19 @@ void Layout::slot_draw_analog_clock_tick()
     // 1. ОПТИМИЗИРОВАННАЯ ПРОВЕРКА ФАЙЛА (Раз в 500 мс вместо 50 мс)
     // =================================================================
     m_fileCheckCounter++;
-    if (m_fileCheckCounter >= 40) { // 10 тиков по 50 мс = 500 миллисекунд 40 > 2 sec
+    if (m_fileCheckCounter >= 10) { // 10 тиков по 50 мс = 500 миллисекунд 40 > 2 sec
         m_fileCheckCounter = 0;     // Сбрасываем счетчик
         
         const QString filePath = "message.txt";
-        // Обновляем флаг в mtvsystem. Обычные виджеты сразу увидят его!
-        mtvsystem->mess_exist = QFile::exists(filePath);
+        QFile file(filePath);
+        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+            QTextStream in(&file);
+            // Сохраняем строку в переменную класса, откуда её заберет draw_message_box_overlay
+            m_lastCachedMessage = in.readAll().trimmed(); 
+            file.close();
+            
+            mtvsystem->mess_exist = !m_lastCachedMessage.isEmpty();
+        }
     }
 
 
@@ -1786,6 +1793,16 @@ void Layout::slot_draw_analog_clock_tick()
     // 3. СИНХРОННЫЙ ВЫВОД ПЛАШКИ ПОВЕРХ ВСЕГО
     // =================================================================
     if (mtvsystem->mess_exist) {
+        // Создаем или очищаем холст кэша
+        const int dark_w = 1720;
+        const int dark_h = 200;
+        if (q_image_cache_file.size() != QSize(dark_w, dark_h)) {
+            q_image_cache_file = QImage(dark_w, dark_h, QImage::Format_ARGB32);
+             // Заполняем черным цветом — это будет базовая подложка, если виджеты не перекроют всю зону
+            q_image_cache_file.fill(Qt::black); 
+
+        }
+       
         // Вызываем рисование текста (проверку QFile::exists внутри неё теперь можно удалить!)
         this->draw_message_box_overlay();
     }
@@ -2826,76 +2843,127 @@ void Layout::readAudioLevelsFile() {
 
 void Layout::draw_message_box_overlay()
 {
-    const QString filePath = "message.txt";
     const int dark_x = 100;
     const int dark_y = 440;
-    const int dark_w = 1720;
-    const int dark_h = 200;
 
-    // =================================================================
-    // 1. ПРОВЕРКА ОБНОВЛЕНИЯ КЭША
-    // =================================================================
-    QFile file(filePath);
-    if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        QTextStream in(&file);
-        QString currentMessage = in.readAll().trimmed();
-        file.close();
+    // Если виджеты еще не успели накопить фон, выходить
+    if (q_image_cache_file.isNull()) return;
 
-        // Если текст изменился (или это первая итерация), перерисовываем кэш
-        if (currentMessage != m_lastCachedMessage) {
-            m_lastCachedMessage = currentMessage;
+    // 1. ИСПОЛЬЗУЕМ АКТУАЛЬНЫЙ ТЕКСТ
+    // Переменная m_lastCachedMessage обновляется раз в 500 мс в вашем slot_draw_analog_clock_tick.
+    // Если файл пустой, просто выводим накопленный затемненный фон без текста.
+    QString currentMessage = m_lastCachedMessage; 
 
-            if (currentMessage.isEmpty()) {
-                m_cachedTextImage = QImage(); // Сбрасываем кэш, если файл пустой
-            } else {
-                // Инициализируем кэш-картинку
-                m_cachedTextImage = QImage(dark_w, dark_h, QImage::Format_ARGB32);
-                // m_cachedTextImage.fill(Qt::transparent);
-                m_cachedTextImage.fill(QColor(60, 60, 60, 20)); 
+    if (!currentMessage.isEmpty()) {
+        // 2. ОТРИСОВКА ТЕКСТА ПРЯМО ПОВЕРХ НАКОПЛЕННОГО ВИДЖЕТАМИ КЭША
+        QPainter painter(&q_image_cache_file);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::TextAntialiasing);
 
-                QPainter painter(&m_cachedTextImage);
-                painter.setRenderHint(QPainter::Antialiasing);
-                painter.setRenderHint(QPainter::TextAntialiasing);
+        QFont font("Arial", 36, QFont::Bold);
+        painter.setFont(font);
 
-                QFont font("Arial", 36, QFont::Bold);
-                painter.setFont(font);
+        QFontMetrics metrics(font);
+        int textWidth = metrics.horizontalAdvance(currentMessage);
+        int textHeight = metrics.height();
 
-                QFontMetrics metrics(font);
-                int textWidth = metrics.horizontalAdvance(currentMessage);
-                int textHeight = metrics.height();
+        int startX = (q_image_cache_file.width() - textWidth) / 2;
+        int startY = (q_image_cache_file.height() - textHeight) / 2 + metrics.ascent();
 
-                int startX = (dark_w - textWidth) / 2;
-                int startY = (dark_h - textHeight) / 2 + metrics.ascent();
+        QPainterPath textPath;
+        textPath.addText(startX, startY, font, currentMessage);
 
-                QPainterPath textPath;
-                textPath.addText(startX, startY, font, currentMessage);
+        // Черный контур букв
+        QPen strokePen(Qt::black, 6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+        painter.setPen(strokePen);
+        painter.setBrush(Qt::NoBrush);
+        painter.drawPath(textPath);
 
-                QPen strokePen(Qt::black, 6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-                painter.setPen(strokePen);
-                painter.setBrush(Qt::NoBrush);
-                painter.drawPath(textPath);
-
-                painter.setPen(Qt::NoPen);
-                painter.setBrush(Qt::white);
-                painter.drawPath(textPath);
-                painter.end();
-                
-                qCDebug(category) << "Regenerated message overlay cache for:" << currentMessage;
-            }
-        }
-    } else {
-        if (!m_cachedTextImage.isNull()){
-            m_cachedTextImage = QImage(); // Сброс в null и очистка памяти;
-            slot_new_format();
-        }
+        // Белое тело букв
+        painter.setPen(Qt::NoPen);
+        painter.setBrush(Qt::white);
+        painter.drawPath(textPath);
+        painter.end();
     }
 
-    // =================================================================
-    // 2. БЫСТРЫЙ ВЫВОД ИЗ КЭША
-    // =================================================================
-    if (!m_cachedTextImage.isNull()) {
-        // Выводим уже готовую картинку из оперативной памяти за 0 миллисекунд нагрузки на CPU
-        mtvsystem->draw_overlay_fast(&m_cachedTextImage, dark_x, dark_y, true);
-        
-    }
+    // 3. БЫСТРЫЙ ВЫВОД ГОТОВОГО ПИРОГА НА ЭКРАН (Каждые 50 мс)
+    // Передаем true, чтобы NEON-код понял, что это финальная сборка плашки
+    mtvsystem->draw_overlay_fast(&q_image_cache_file, dark_x, dark_y, true);
 }
+
+
+// void Layout::draw_message_box_overlay()
+// {
+//     const QString filePath = "message.txt";
+//     const int dark_x = 100;
+//     const int dark_y = 440;
+//     const int dark_w = 1720;
+//     const int dark_h = 200;
+
+//     // =================================================================
+//     // 1. ПРОВЕРКА ОБНОВЛЕНИЯ КЭША
+//     // =================================================================
+//     QFile file(filePath);
+//     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
+//         QTextStream in(&file);
+//         QString currentMessage = in.readAll().trimmed();
+//         file.close();
+
+//         // Если текст изменился (или это первая итерация), перерисовываем кэш
+//         if (currentMessage != m_lastCachedMessage) {
+//             m_lastCachedMessage = currentMessage;
+
+//             if (currentMessage.isEmpty()) {
+//                 m_cachedTextImage = QImage(); // Сбрасываем кэш, если файл пустой
+//             } else {
+//                 // Инициализируем кэш-картинку
+//                 m_cachedTextImage = QImage(dark_w, dark_h, QImage::Format_ARGB32);
+//                 // m_cachedTextImage.fill(Qt::transparent);
+//                 m_cachedTextImage.fill(QColor(60, 60, 60, 20)); 
+
+//                 QPainter painter(&m_cachedTextImage);
+//                 painter.setRenderHint(QPainter::Antialiasing);
+//                 painter.setRenderHint(QPainter::TextAntialiasing);
+
+//                 QFont font("Arial", 36, QFont::Bold);
+//                 painter.setFont(font);
+
+//                 QFontMetrics metrics(font);
+//                 int textWidth = metrics.horizontalAdvance(currentMessage);
+//                 int textHeight = metrics.height();
+
+//                 int startX = (dark_w - textWidth) / 2;
+//                 int startY = (dark_h - textHeight) / 2 + metrics.ascent();
+
+//                 QPainterPath textPath;
+//                 textPath.addText(startX, startY, font, currentMessage);
+
+//                 QPen strokePen(Qt::black, 6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
+//                 painter.setPen(strokePen);
+//                 painter.setBrush(Qt::NoBrush);
+//                 painter.drawPath(textPath);
+
+//                 painter.setPen(Qt::NoPen);
+//                 painter.setBrush(Qt::white);
+//                 painter.drawPath(textPath);
+//                 painter.end();
+                
+//                 qCDebug(category) << "Regenerated message overlay cache for:" << currentMessage;
+//             }
+//         }
+//     } else {
+//         if (!m_cachedTextImage.isNull()){
+//             m_cachedTextImage = QImage(); // Сброс в null и очистка памяти;
+//             slot_new_format();
+//         }
+//     }
+
+//     // =================================================================
+//     // 2. БЫСТРЫЙ ВЫВОД ИЗ КЭША
+//     // =================================================================
+//     if (!m_cachedTextImage.isNull()) {
+//         // Выводим уже готовую картинку из оперативной памяти за 0 миллисекунд нагрузки на CPU
+//         mtvsystem->draw_overlay_fast(&m_cachedTextImage, dark_x, dark_y, true);
+        
+//     }
+// }
