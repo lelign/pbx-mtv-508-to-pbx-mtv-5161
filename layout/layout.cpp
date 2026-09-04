@@ -1900,16 +1900,21 @@ void Layout::DisplayTALLY(int addr, int tally)
 {
     if(!layout_object[addr].screen_plan.enable_video) return;
 
-    if(cascade.num == (addr >> 3)){
-        slot_TALLY(addr & 0x07, tally);
+    // if(cascade.num == (addr >> 3)){
+    //     slot_TALLY(addr & 0x07, tally);
+    // }
+     if(cascade.num == (addr >> 4)){
+        slot_TALLY(addr & 0x0F, tally);
     }
 }
 
 void Layout::slot_TALLY(int input, int state)
 {
-    if(!cascade.last_slave_device && (input == 7)) return ;
+    // if(!cascade.last_slave_device && (input == 7)) return ;
+    if(!cascade.last_slave_device && (input == 15)) return ;
 
-    int k = cascade.num * 8 + input;
+    // int k = cascade.num * 8 + input;
+    int k = cascade.num * 16 + input;
     layout_object[k].tally = state;
 
     if(!layout_object[k].screen_plan.enable_video) return;
@@ -2005,7 +2010,7 @@ QRect cell;
 QColor color;
 
     if(tally_indicator_mode == TALLY_OFF){
-        qCDebug(category) << ANSI_GREEN << "tally_indicator_mode == TALLY_OFF" << TALLY_OFF << layout_object.cell.input << ANSI_RESET;
+        // qCDebug(category) << ANSI_GREEN << "tally_indicator_mode == TALLY_OFF" << TALLY_OFF << layout_object.cell.input << ANSI_RESET;
         clear_TALLY_indicator(layout_object);
         return;
     }
@@ -2043,7 +2048,7 @@ QColor color;
     cell = layout_object.screen_plan.cell;
     tally_rec = get_TALLY_indicator_rec(cell);
 
-    qCDebug(category) << ANSI_GREEN << "draw_TALLY_indicator" << layout_object.cell.input << cell << color << ANSI_RESET;
+    // qCDebug(category) << ANSI_GREEN << "draw_TALLY_indicator" << layout_object.cell.input << cell << color << ANSI_RESET;
     QImage image_tally(tally_rec.width(), tally_rec.height(),  QImage::Format_ARGB32);
     QRect alarm_rec;
     alarm_rec = QRect(0, 0, tally_rec.width(), tally_rec.height());
