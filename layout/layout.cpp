@@ -2157,14 +2157,18 @@ QImage Layout::get_layout_1x1(int index)
     QRect cell(0, 0, image.width(), image.height());
     set_teletext_plane(cell);
 
-    for(int i = 0; i < 8; ++i){
-        int k = cascade.num * 8 + i;
+    // for(int i = 0; i < 8; ++i){
+    //     int k = cascade.num * 8 + i;
+    for(int i = 0; i < 16; ++i){
+        int k = cascade.num * 16 + i;
         layout_object[k].screen_plan.enable_video = 0;
     }
 
-    if((index >> 3) != cascade.num) return image;
+    // if((index >> 3) != cascade.num) return image;
+    if((index >> 4) != cascade.num) return image;
 
-    int k = cascade.num * 8 + (index & 0x07);
+    // int k = cascade.num * 8 + (index & 0x07);
+    int k = cascade.num * 16 + (index & 0x0F);
     layout_object[k].screen_plan.enable_video = 1;
     layout_object[k].screen_plan.cell = cell;
     layout_object[k].screen_plan.plane_video = cell;
@@ -2398,7 +2402,8 @@ void Layout::check_video_loss(int cell_index)
 {
 int error, error_old;
 
-    int k = cascade.num * 8 + cell_index;
+    // int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
 
     if(!mtvsystem->get_sdi_status(cell_index))
         error = 1;
@@ -2458,16 +2463,19 @@ int cascade_num, input;
 /*---------------------------------------------------------------------------*/
 void Layout::update_alarm()
 {
-static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+// static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+static int format[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
-    for(int i = 0; i < 8; ++i){
+    // for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         if(format[i] != mtvsystem->get_sdi_format(i)){
             format[i] = mtvsystem->get_sdi_format(i);
 
             if(mtvsystem->get_sdi_status(i)){
                 QString str, state_str;
 
-                if((cascade.mode > STAND_ALONE) && (i == 7) && !cascade.last_slave_device)
+                // if((cascade.mode > STAND_ALONE) && (i == 7) && !cascade.last_slave_device)
+                if((cascade.mode > STAND_ALONE) && (i == 15) && !cascade.last_slave_device)
                     continue;   // Не писать в журнал формат 8-го входа
 
                 state_str = mtvsystem->get_sdi_format_str(i);;
@@ -2567,6 +2575,7 @@ static int op47_old[16] = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
 
 void Layout::scte_104_update()
 {
+    // for(int i = 0; i < 16; ++i){
     for(int i = 0; i < 16; ++i){
         display_scte_104(i);
     }
@@ -2574,7 +2583,8 @@ void Layout::scte_104_update()
 
 void Layout::display_scte_104(int index)
 {
-    int k = cascade.num * 8 + index;
+    // int k = cascade.num * 8 + index;
+    int k = cascade.num * 16 + index;
 
     if(!layout_object[k].screen_plan.enable_video) return;
     if(!layout_object[k].cell.scte_104_display)    return;
@@ -2614,7 +2624,8 @@ void Layout::display_scte_104(int index)
 
 void Layout::display_text_icons(QImage &image, QRect panel, int cell_index)
 {
-    int k = cascade.num * 8 + cell_index;
+    // int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
     if(!layout_object[k].screen_plan.enable_video) return;
 
     if((k == 0) & teletext_cell.enable) return;
@@ -2636,7 +2647,8 @@ void Layout::display_text_icons(QImage &image, QRect panel, int cell_index)
 
 void Layout::display_op47_icons(int cell_index)
 {
-    int k = cascade.num * 8 + cell_index;
+    // int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
     QRect panel = layout_object[k].screen_plan.panel_text_icons;
 
     QImage image_text_icons(panel.width(), panel.height(), QImage::Format_ARGB32);
