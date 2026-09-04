@@ -59,6 +59,13 @@ public:
         PbxMtvSystem();
         ~PbxMtvSystem();
         bool mess_exist = false;
+        // структура затемненной области
+        struct darken_area_t {
+                int dark_top = 440;
+                int dark_bottom = 640;
+                int dark_left = 100;
+                int dark_right = 1820;
+        };
 private:
         QTimer sdi_format_timer;
         QTimer sdi_format_notify_timer;
@@ -102,6 +109,8 @@ private:
         int64_t last_elapsed_time = -1; // чтобы не сыпал в терминал
 
         QImage* m_msgImageCache = nullptr;
+        
+        
 private slots:
         void slot_fps_hardware_trigger();
 private Q_SLOTS:

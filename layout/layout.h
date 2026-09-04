@@ -374,7 +374,18 @@ private:
 
     QImage m_darkBlankImage; // Маленькая заглушка для фильтрации luma
 
+    struct net_setting_t{
+        QString ip;
+        QString mask;
+        QString gw;
+        QString mac;
+    };
 
+    net_setting_t network_0;
+
+    QString get_network_setting(); // перенесен из mtv-web
+
+ 
 private slots:
     // Вызывается таймером каждые 100 мс
     void updateMeterRoutine();

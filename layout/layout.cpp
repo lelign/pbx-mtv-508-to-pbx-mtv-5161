@@ -10,6 +10,9 @@
 #include <QLinearGradient>
 #include <QColor>
 
+#include  "mtv-system/mtv-system.h"
+
+#include <QNetworkInterface> // for get_IP
 
 static QLoggingCategory category("LayoutClass");
 #define LAYOUT_PRESET_FILE_NAME      ("pbx-mtv-508_layout_preset")
@@ -1794,16 +1797,18 @@ void Layout::slot_draw_analog_clock_tick()
     // =================================================================
     if (mtvsystem->mess_exist) {
         // Создаем или очищаем холст кэша
-        const int dark_w = 1720;
-        const int dark_h = 200;
-        if (q_image_cache_file.size() != QSize(dark_w, dark_h)) {
-            q_image_cache_file = QImage(dark_w, dark_h, QImage::Format_ARGB32);
+        PbxMtvSystem::darken_area_t dark_zone;
+        //dark_zone.dark_right - dark_zone.dark_left
+        //const int dark_w = 1720;
+        // const int dark_h = 200;
+        if (q_image_cache_file.size() != QSize(dark_zone.dark_right - dark_zone.dark_left, dark_zone.dark_bottom - dark_zone.dark_top)) {
+            q_image_cache_file = QImage(dark_zone.dark_right - dark_zone.dark_left, dark_zone.dark_bottom - dark_zone.dark_top, QImage::Format_ARGB32);
              // Заполняем черным цветом — это будет базовая подложка, если виджеты не перекроют всю зону
             q_image_cache_file.fill(Qt::black); 
 
         }
        
-        // Вызываем рисование текста (проверку QFile::exists внутри неё теперь можно удалить!)
+        // Вызываем рисование текста
         this->draw_message_box_overlay();
     }
 
@@ -2335,7 +2340,6 @@ void Layout::clear_alarm(layout_object_t layout_object)
     display_scte_104(layout_object.cell.input &0x07); // Обновить метку 104 т.к. на окнах малого размера clear_alarm затирает часть метки
 }
 
-
 QRect Layout::get_alarm_label_rec(QRect cell)
 {
 const float ratio_19_9 = (float)16 / (float)9;
@@ -2403,7 +2407,6 @@ void Layout::draw_alarm_label(int index, layout_object_t layout_object)
         alarm_label_rec.translate(0, offset_h);
     }
 }
-
 
 void Layout::check_video_loss(int cell_index)
 {
@@ -2503,7 +2506,6 @@ void Layout::clean_teletext_image(int channel)
     blit_to_frame(&image_teletext, x, y);
     mtvsystem->draw_overlay_fast(&image_teletext, x, y, false);
 }
-
 
 void Layout::display_teletext(QImage image_teletext)
 {
@@ -2843,19 +2845,11 @@ void Layout::readAudioLevelsFile() {
 
 void Layout::draw_message_box_overlay()
 {
-    const int dark_x = 100;
-    const int dark_y = 440;
-
-    // Если виджеты еще не успели накопить фон, выходить
     if (q_image_cache_file.isNull()) return;
 
-    // 1. ИСПОЛЬЗУЕМ АКТУАЛЬНЫЙ ТЕКСТ
-    // Переменная m_lastCachedMessage обновляется раз в 500 мс в вашем slot_draw_analog_clock_tick.
-    // Если файл пустой, просто выводим накопленный затемненный фон без текста.
-    QString currentMessage = m_lastCachedMessage; 
+    QString currentMessage = get_network_setting();
 
     if (!currentMessage.isEmpty()) {
-        // 2. ОТРИСОВКА ТЕКСТА ПРЯМО ПОВЕРХ НАКОПЛЕННОГО ВИДЖЕТАМИ КЭША
         QPainter painter(&q_image_cache_file);
         painter.setRenderHint(QPainter::Antialiasing);
         painter.setRenderHint(QPainter::TextAntialiasing);
@@ -2863,107 +2857,77 @@ void Layout::draw_message_box_overlay()
         QFont font("Arial", 36, QFont::Bold);
         painter.setFont(font);
 
-        QFontMetrics metrics(font);
-        int textWidth = metrics.horizontalAdvance(currentMessage);
-        int textHeight = metrics.height();
+        // 1. Ограничиваем прямоугольник для отрисовки (весь размер кэш-картинки)
+        QRect rect = q_image_cache_file.rect();
 
-        int startX = (q_image_cache_file.width() - textWidth) / 2;
-        int startY = (q_image_cache_file.height() - textHeight) / 2 + metrics.ascent();
+        // Флаги: выравнивание по центру + поддержка переносов \n + замена \t на пробелы
+        int flags = Qt::AlignLeft | Qt::TextWordWrap | Qt::TextExpandTabs;
 
-        QPainterPath textPath;
-        textPath.addText(startX, startY, font, currentMessage);
+        // 2. РИСУЕМ ЧЕРНЫЙ КОНТУР ТЕКСТА
+        // Так как drawText не умеет делать QPen-обводку напрямую, классический быстрый трюк 
+        // для встраиваемых систем — отрисовать текст со смещением на 2 пикселя во все стороны
+        painter.setPen(Qt::black);
+        int offset = 2;
+        painter.drawText(rect.adjusted(-offset, -offset, -offset, -offset), flags, currentMessage);
+        painter.drawText(rect.adjusted(offset, -offset, offset, -offset), flags, currentMessage);
+        painter.drawText(rect.adjusted(-offset, offset, -offset, offset), flags, currentMessage);
+        painter.drawText(rect.adjusted(offset, offset, offset, offset), flags, currentMessage);
 
-        // Черный контур букв
-        QPen strokePen(Qt::black, 6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-        painter.setPen(strokePen);
-        painter.setBrush(Qt::NoBrush);
-        painter.drawPath(textPath);
+        // 3. РИСУЕМ БЕЛОЕ ТЕЛО БУКВ ПОВЕРХ
+        painter.setPen(Qt::white);
+        painter.drawText(rect, flags, currentMessage);
 
-        // Белое тело букв
-        painter.setPen(Qt::NoPen);
-        painter.setBrush(Qt::white);
-        painter.drawPath(textPath);
         painter.end();
     }
 
-    // 3. БЫСТРЫЙ ВЫВОД ГОТОВОГО ПИРОГА НА ЭКРАН (Каждые 50 мс)
-    // Передаем true, чтобы NEON-код понял, что это финальная сборка плашки
-    mtvsystem->draw_overlay_fast(&q_image_cache_file, dark_x, dark_y, true);
+    PbxMtvSystem::darken_area_t dark_zone; 
+    mtvsystem->draw_overlay_fast(&q_image_cache_file, dark_zone.dark_left, dark_zone.dark_top, true);
 }
 
 
-// void Layout::draw_message_box_overlay()
-// {
-//     const QString filePath = "message.txt";
-//     const int dark_x = 100;
-//     const int dark_y = 440;
-//     const int dark_w = 1720;
-//     const int dark_h = 200;
 
-//     // =================================================================
-//     // 1. ПРОВЕРКА ОБНОВЛЕНИЯ КЭША
-//     // =================================================================
-//     QFile file(filePath);
-//     if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-//         QTextStream in(&file);
-//         QString currentMessage = in.readAll().trimmed();
-//         file.close();
 
-//         // Если текст изменился (или это первая итерация), перерисовываем кэш
-//         if (currentMessage != m_lastCachedMessage) {
-//             m_lastCachedMessage = currentMessage;
 
-//             if (currentMessage.isEmpty()) {
-//                 m_cachedTextImage = QImage(); // Сбрасываем кэш, если файл пустой
-//             } else {
-//                 // Инициализируем кэш-картинку
-//                 m_cachedTextImage = QImage(dark_w, dark_h, QImage::Format_ARGB32);
-//                 // m_cachedTextImage.fill(Qt::transparent);
-//                 m_cachedTextImage.fill(QColor(60, 60, 60, 20)); 
 
-//                 QPainter painter(&m_cachedTextImage);
-//                 painter.setRenderHint(QPainter::Antialiasing);
-//                 painter.setRenderHint(QPainter::TextAntialiasing);
 
-//                 QFont font("Arial", 36, QFont::Bold);
-//                 painter.setFont(font);
 
-//                 QFontMetrics metrics(font);
-//                 int textWidth = metrics.horizontalAdvance(currentMessage);
-//                 int textHeight = metrics.height();
 
-//                 int startX = (dark_w - textWidth) / 2;
-//                 int startY = (dark_h - textHeight) / 2 + metrics.ascent();
 
-//                 QPainterPath textPath;
-//                 textPath.addText(startX, startY, font, currentMessage);
 
-//                 QPen strokePen(Qt::black, 6, Qt::SolidLine, Qt::RoundCap, Qt::RoundJoin);
-//                 painter.setPen(strokePen);
-//                 painter.setBrush(Qt::NoBrush);
-//                 painter.drawPath(textPath);
+// layout.cpp
+QString Layout::get_network_setting() 
+{
+    QString IP_mac; 
 
-//                 painter.setPen(Qt::NoPen);
-//                 painter.setBrush(Qt::white);
-//                 painter.drawPath(textPath);
-//                 painter.end();
-                
-//                 qCDebug(category) << "Regenerated message overlay cache for:" << currentMessage;
-//             }
-//         }
-//     } else {
-//         if (!m_cachedTextImage.isNull()){
-//             m_cachedTextImage = QImage(); // Сброс в null и очистка памяти;
-//             slot_new_format();
-//         }
-//     }
+    // Перебираем интерфейсы через Qt
+    foreach(QNetworkInterface netInterface, QNetworkInterface::allInterfaces())
+    {
+        // Ищем именно eth0 и пропускаем петлевой интерфейс
+        if(!(netInterface.flags() & QNetworkInterface::IsLoopBack) && netInterface.name() == "eth0")
+        {                
+            network_0.mac = netInterface.hardwareAddress();
+            
+            // Получаем записи адресов, которые включают и IP, и Маску, и Бродкаст
+            QList<QNetworkAddressEntry> entries = netInterface.addressEntries();
+            for (const QNetworkAddressEntry &entry : entries) 
+            {
+                // Нам нужен только IPv4
+                if(entry.ip().protocol() == QAbstractSocket::IPv4Protocol)
+                {
+                    // Сохраняем в вашу структуру network_0 данные через Qt
+                    network_0.ip   = entry.ip().toString();
+                    network_0.mask = entry.netmask().toString();
+                    network_0.gw   = ""; // Шлюз (Gateway) Qt напрямую не получает, если он критичен — см. Вариант 2
 
-//     // =================================================================
-//     // 2. БЫСТРЫЙ ВЫВОД ИЗ КЭША
-//     // =================================================================
-//     if (!m_cachedTextImage.isNull()) {
-//         // Выводим уже готовую картинку из оперативной памяти за 0 миллисекунд нагрузки на CPU
-//         mtvsystem->draw_overlay_fast(&m_cachedTextImage, dark_x, dark_y, true);
-        
-//     }
-// }
+                    // qDebug(category) << "\tconnected IP:" << network_0.ip << "MAC:" << network_0.mac;
+                    
+                    // Формируем результирующую строку
+                    IP_mac = QString("\tProfitt PBX-MTV-5161 \n\tIP: %1 \n\tMAC: %2").arg(network_0.ip).arg(network_0.mac);
+                    return IP_mac;
+                }
+            }
+        }
+    }
+    
+    return QString(); 
+}

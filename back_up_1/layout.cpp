@@ -866,7 +866,7 @@ void Layout::update_layout()
     gpio->set_mode(gpio_mode);
     cascade_udate();
     draw_overlay();
-    for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         pip_config(i);
     }
 
@@ -1770,12 +1770,13 @@ void Layout::slot_draw_analog_clock_tick()
     // 1. ОПТИМИЗИРОВАННАЯ ПРОВЕРКА ФАЙЛА (Раз в 500 мс вместо 50 мс)
     // =================================================================
     m_fileCheckCounter++;
-    if (m_fileCheckCounter >= 40) { // 10 тиков по 50 мс = 500 миллисекунд 40 > 2 sec
+    if (m_fileCheckCounter >= 10) { // 10 тиков по 50 мс = 500 миллисекунд 40 > 2 sec
         m_fileCheckCounter = 0;     // Сбрасываем счетчик
         
         const QString filePath = "message.txt";
         // Обновляем флаг в mtvsystem. Обычные виджеты сразу увидят его!
-        mtvsystem->mess_exist = QFile::exists(filePath);
+        // mtvsystem->mess_exist = QFile::exists(filePath);
+        mtvsystem->mess_exist = (QFileInfo(filePath).size() > 0);
     }
 
 

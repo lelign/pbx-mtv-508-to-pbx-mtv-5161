@@ -824,7 +824,7 @@ void Mtv_web::slot_web_new_client( QWebSocket *pClient )
 {
 QByteArray to_send_data;
 
-    get_network_setting();
+    get_network_setting(); // т.к. нигде не используется, только в debug
 
     to_send_data = get_json_settings();    
     web_server->senddata( pClient, to_send_data );
@@ -1241,14 +1241,14 @@ static const char *eth0="eth0";
             if(netInterface.name() == "eth0")   {                
                 network_0.mac = netInterface.hardwareAddress();
                 // ign added get ip
-                if (netInterface.hardwareAddress().toUpper() == network_0.mac.toUpper()) {
+                // if (netInterface.hardwareAddress().toUpper() == network_0.mac.toUpper()) {
                     QList<QHostAddress> entries = netInterface.allAddresses();
                     for (const QHostAddress &entry : entries) {
                         if(!entry.isLoopback() && entry.protocol() == QAbstractSocket::IPv4Protocol){
                             qDebug(category) << "\tconnected IP:" << entry.toString() << "MAC" << network_0.mac;
                         }
                     }
-                }    
+                // }    
             }
         }
     }

@@ -1132,89 +1132,90 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
     int16x8_t cb_r = vmovq_n_s16(-43); int16x8_t cb_g = vmovq_n_s16(-85); int16x8_t cb_b = vmovq_n_s16(128);
     int16x8_t cr_r = vmovq_n_s16(128); int16x8_t cr_g = vmovq_n_s16(-107); int16x8_t cr_b = vmovq_n_s16(-21);
 
-    const int dark_top = 440, dark_bottom = 640;
-    const int dark_left = 100, dark_right = 1820;
+    darken_area_t dark_zone;
 
     int x = 0;
     int vector_width = width & ~7; 
 
     // Проверяем попадание строки в зону плашки по Y
-    bool is_y_inside_dark_zone = (screen_y >= dark_top && screen_y < dark_bottom);
+    bool is_y_inside_dark_zone = (screen_y >= dark_zone.dark_top && screen_y < dark_zone.dark_bottom);
     
     // Получаем строку для записи в кэш-картинку Layout, если мы в режиме отрисовки виджетов
     uint8_t * cache_line = nullptr;
     if (!darken && this->mess_exist && is_y_inside_dark_zone && cacheImg && !cacheImg->isNull()) {
-        int cache_y = screen_y - dark_top;
+        int cache_y = screen_y - dark_zone.dark_top;
         cache_line = cacheImg->scanLine(cache_y); // Открываем строку кэша на запись
     }
 
     const uint16_t x_offsets[] = {0, 1, 2, 3, 4, 5, 6, 7};
     uint16x8_t v_x_offsets = vld1q_u16(x_offsets);
-    uint16x8_t v_dark_left = vmovq_n_u16(dark_left);
-    uint16x8_t v_dark_right = vmovq_n_u16(dark_right);
+    uint16x8_t v_dark_left = vmovq_n_u16(dark_zone.dark_left);
+    uint16x8_t v_dark_right = vmovq_n_u16(dark_zone.dark_right);
 
+
+    int dark_zone_width = dark_zone.dark_right - dark_zone.dark_left;
         for(; x < vector_width; x += 8) {
-        uint8x8x4_t rgb_data = vld4_u8(line + x * 4);
-        uint16x8_t r_u = vmovl_u8(rgb_data.val[2]);
-        uint16x8_t g_u = vmovl_u8(rgb_data.val[1]);
-        uint16x8_t b_u = vmovl_u8(rgb_data.val[0]);
+                uint8x8x4_t rgb_data = vld4_u8(line + x * 4);
+                uint16x8_t r_u = vmovl_u8(rgb_data.val[2]);
+                uint16x8_t g_u = vmovl_u8(rgb_data.val[1]);
+                uint16x8_t b_u = vmovl_u8(rgb_data.val[0]);
 
-        // Рассчитываем стандартный YUV
-        uint16x8_t y_acc = vmulq_u16(r_u, y_r);
-        y_acc = vmlaq_u16(y_acc, g_u, y_g);
-        y_acc = vmlaq_u16(y_acc, b_u, y_b);
-        uint8x8_t y_val = vqshrn_n_u16(y_acc, 8); 
+                // Рассчитываем стандартный YUV
+                uint16x8_t y_acc = vmulq_u16(r_u, y_r);
+                y_acc = vmlaq_u16(y_acc, g_u, y_g);
+                y_acc = vmlaq_u16(y_acc, b_u, y_b);
+                uint8x8_t y_val = vqshrn_n_u16(y_acc, 8); 
 
-        int16x8_t b = vreinterpretq_s16_u16(b_u); int16x8_t g = vreinterpretq_s16_u16(g_u); int16x8_t r = vreinterpretq_s16_u16(r_u);
-        int16x8_t cb_acc = vmulq_s16(r, cb_r); cb_acc = vmlaq_s16(cb_acc, g, cb_g); cb_acc = vmlaq_s16(cb_acc, b, cb_b);
-        uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
+                int16x8_t b = vreinterpretq_s16_u16(b_u); int16x8_t g = vreinterpretq_s16_u16(g_u); int16x8_t r = vreinterpretq_s16_u16(r_u);
+                int16x8_t cb_acc = vmulq_s16(r, cb_r); cb_acc = vmlaq_s16(cb_acc, g, cb_g); cb_acc = vmlaq_s16(cb_acc, b, cb_b);
+                uint8x8_t cb_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cb_acc, 8), vmovq_n_s16(128)));
 
-        int16x8_t cr_acc = vmulq_s16(r, cr_r); cr_acc = vmlaq_s16(cr_acc, g, cr_g); cr_acc = vmlaq_s16(cr_acc, b, cr_b);
-        uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
+                int16x8_t cr_acc = vmulq_s16(r, cr_r); cr_acc = vmlaq_s16(cr_acc, g, cr_g); cr_acc = vmlaq_s16(cr_acc, b, cr_b);
+                uint8x8_t cr_val = vqmovun_s16(vaddq_s16(vshrq_n_s16(cr_acc, 8), vmovq_n_s16(128)));
 
-        uint8x8x2_t cb_pairs = vuzp_u8(cb_val, cb_val); 
-        uint8x8x2_t cr_pairs = vuzp_u8(cr_val, cr_val);
-        uint8x8_t cb_down = vrhadd_u8(cb_pairs.val[0], cb_pairs.val[0]); 
-        uint8x8_t cr_down = vrhadd_u8(cr_pairs.val[0], cr_pairs.val[0]); 
+                uint8x8x2_t cb_pairs = vuzp_u8(cb_val, cb_val); 
+                uint8x8x2_t cr_pairs = vuzp_u8(cr_val, cr_val);
+                uint8x8_t cb_down = vrhadd_u8(cb_pairs.val[0], cb_pairs.val[0]); 
+                uint8x8_t cr_down = vrhadd_u8(cr_pairs.val[0], cr_pairs.val[0]); 
 
-        uint8x8x3_t out_data;
-        out_data.val[0] = vzip_u8(cb_down, cr_down).val[0]; 
-        out_data.val[1] = y_val; 
-        out_data.val[2] = darken ? vmov_n_u8(255) : rgb_data.val[3]; 
+                uint8x8x3_t out_data;
+                out_data.val[0] = vzip_u8(cb_down, cr_down).val[0]; 
+                out_data.val[1] = y_val; 
+                out_data.val[2] = darken ? vmov_n_u8(255) : rgb_data.val[3]; 
 
-        // ИСПРАВЛЕНИЕ ВСПЫШЕК:
-        // Если это обычный виджет (!darken) и горит сообщение, и мы находимся внутри зоны плашки по Y,
-        // мы НЕ пишем данные на экран дисплея (пропускаем vst3_u8 для dst).
-        // Таким образом яркий таймер физически не успеет «моргнуть» на экране!
-        if (darken || !this->mess_exist || !is_y_inside_dark_zone) {
-            vst3_u8(dst, out_data);
-        }
-        dst += 24;
+                // ИСПРАВЛЕНИЕ ВСПЫШЕК:
+                // Если это обычный виджет (!darken) и горит сообщение, и мы находимся внутри зоны плашки по Y,
+                // мы НЕ пишем данные на экран дисплея (пропускаем vst3_u8 для dst).
+                // Таким образом яркий таймер физически не успеет «моргнуть» на экране!
+                if (darken || !this->mess_exist || !is_y_inside_dark_zone) {
+                vst3_u8(dst, out_data);
+                }
+                dst += 24;
 
-        // НАКОПЛЕНИЕ КЭША ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ
-        if (cache_line) {
-            uint16x8_t v_abs_x = vaddq_u16(vmovq_n_u16(screen_x_start + x), v_x_offsets);
-            uint16x8_t m_left = vcgeq_u16(v_abs_x, v_dark_left);
-            uint16x8_t m_right = vcltq_u16(v_abs_x, v_dark_right);
-            uint16x8_t m_inside = vandq_u16(m_left, m_right);
-            uint8x8_t m_inside_u8 = vmovn_u16(m_inside);
+                // НАКОПЛЕНИЕ КЭША ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ
+                if (cache_line) {
+                        uint16x8_t v_abs_x = vaddq_u16(vmovq_n_u16(screen_x_start + x), v_x_offsets);
+                        uint16x8_t m_left = vcgeq_u16(v_abs_x, v_dark_left);
+                        uint16x8_t m_right = vcltq_u16(v_abs_x, v_dark_right);
+                        uint16x8_t m_inside = vandq_u16(m_left, m_right);
+                        uint8x8_t m_inside_u8 = vmovn_u16(m_inside);
 
-            uint8x8_t r_half = vshrn_n_u16(r_u, 1);
-            uint8x8_t g_half = vshrn_n_u16(g_u, 1);
-            uint8x8_t b_half = vshrn_n_u16(b_u, 1);
+                        uint8x8_t r_half = vshrn_n_u16(r_u, 1);
+                        uint8x8_t g_half = vshrn_n_u16(g_u, 1);
+                        uint8x8_t b_half = vshrn_n_u16(b_u, 1);
 
-            int cache_x = (screen_x_start + x) - dark_left;
-            if (cache_x >= 0 && (cache_x + 8) <= 1720) {
-                uint8x8x4_t current_cache = vld4_u8(cache_line + cache_x * 4);
-                uint8x8x4_t out_cache;
-                out_cache.val[2] = vbsl_u8(m_inside_u8, r_half, current_cache.val[2]); 
-                out_cache.val[1] = vbsl_u8(m_inside_u8, g_half, current_cache.val[1]); 
-                out_cache.val[0] = vbsl_u8(m_inside_u8, b_half, current_cache.val[0]); 
-                out_cache.val[3] = vmov_n_u8(255); 
+                        int cache_x = (screen_x_start + x) - dark_zone.dark_left;
+                        if (cache_x >= 0 && (cache_x + 8) <= dark_zone_width) {
+                                uint8x8x4_t current_cache = vld4_u8(cache_line + cache_x * 4);
+                                uint8x8x4_t out_cache;
+                                out_cache.val[2] = vbsl_u8(m_inside_u8, r_half, current_cache.val[2]); 
+                                out_cache.val[1] = vbsl_u8(m_inside_u8, g_half, current_cache.val[1]); 
+                                out_cache.val[0] = vbsl_u8(m_inside_u8, b_half, current_cache.val[0]); 
+                                out_cache.val[3] = vmov_n_u8(255); 
 
-                vst4_u8(cache_line + cache_x * 4, out_cache);
-            }
-        }
+                                vst4_u8(cache_line + cache_x * 4, out_cache);
+                        }
+                }
     }
 
     
@@ -1340,33 +1341,21 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y, 
     int img_h = image->height();
     uint8_t* start_address = reinterpret_cast<uint8_t*>(buffer + (this->current_buffer_index * (video_size / 2)));
 
-    // Координаты темной зоны
-    const int dark_top = 440;
-    const int dark_bottom = 640;
-
     for (int y = 0; y < img_h; ++y) {
         int screen_y = y + offset_y;
 
-        // ВОЗВРАЩАЕМ ЗАЩИТУ ОТ МИГАНИЯ: Обычным виджетам (darken == false) 
-        // строго запрещено затирать память в зоне активного сообщения.
-        // if (!darken && this->mess_exist) {
-        //     if (screen_y >= dark_top && screen_y < dark_bottom) {
-        //         continue; 
-        //     }
-        // }
-
-        uint8_t * current_row_with_offset = start_address + (screen_y * row_stride) + (aligned_offset_x * 3);
-        
+        uint8_t * current_row_with_offset = start_address + (screen_y * row_stride) + (aligned_offset_x * 3);        
         
         // // Вызываем прямолинейную быструю конвертацию кадра
-        // convert_line(image, y, img_w, current_row_with_offset, darken, aligned_offset_x, screen_y, m_msgImageCache);
-        // Передаем cacheFile внутрь конвертера строк
         convert_line(image, y, img_w, current_row_with_offset, darken, aligned_offset_x, screen_y, m_msgImageCache);
     }
     
     // Оптимизированный замер времени
     int64_t current_elapsed = timer.elapsed();
-    if (current_elapsed != last_elapsed_time && current_elapsed > 0) {
+    const int64_t delta = 2; // Порог чувствительности в миллисекундах
+
+    // Логируем только если разница во времени >= delta
+    if (std::abs(current_elapsed - last_elapsed_time) >= delta && current_elapsed > 0) {
         qCDebug(category) << ANSI_MAGENTA << "draw_overlay_fast();" << ANSI_RESET
                         << current_elapsed << "milliseconds" 
                         << ANSI_MAGENTA "\tcurrent_idx" << ANSI_RESET
