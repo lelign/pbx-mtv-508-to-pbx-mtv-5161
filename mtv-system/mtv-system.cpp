@@ -1224,7 +1224,7 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
 }
 
 
-//anton ver
+//anton ver похоже нигде не вызывается
 void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
 {
         // ... (Your standard null-pointer checks and boundary checks remain here) ...
@@ -1273,7 +1273,7 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
         
         // convert_line(image, y, image->width(), current_row_with_offset);
         // convert_line(image, y, image->width(), current_row_with_offset, false, aligned_offset_x, screen_y);
-        
+        convert_line(image, y, img_w, current_row_with_offset, false, aligned_offset_x, screen_y, m_msgImageCache);        
         
     }
 
