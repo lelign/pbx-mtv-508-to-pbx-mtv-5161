@@ -672,10 +672,10 @@ void Layout::flush_overlay()
 void Layout::blit_to_frame(QImage *image, int x, int y)
 {
     // 1. Сохраняем аргументы текущего вызова в коллекцию
-    if (image) {
-        BlitArgs args = { x, y, image->width(), image->height() };
-        current_frame_args.push_back(args);
-    }
+    // if (image) {
+    //     BlitArgs args = { x, y, image->width(), image->height() };
+    //     current_frame_args.push_back(args);
+    // }
 
      QPainter painter(&full_overlay_frame);
     // Source, а не SourceOver: полностью ЗАМЕЩАЕТ пиксели и альфа-канал в этом
@@ -2679,31 +2679,31 @@ void Layout::slot_splice(int index, QString text_in, QString text_out)
     // flush_overlay();
 }
 
-void Layout::flush_blit_logs()
-{
-    if (current_frame_args != last_printed_args) {
+// void Layout::flush_blit_logs()
+// {
+//     if (current_frame_args != last_printed_args) {
         
-        // Используем \033[33m для желтого цвета и \033[0m для сброса цвета
-        QString log_msg = QString("\033[32m[Layout Blit Changed] Count: %1 -> Processes:\033[0m ").arg(current_frame_args.size());
+//         // Используем \033[33m для желтого цвета и \033[0m для сброса цвета
+//         QString log_msg = QString("\033[32m[Layout Blit Changed] Count: %1 -> Processes:\033[0m ").arg(current_frame_args.size());
         
-        for (size_t i = 0; i < current_frame_args.size(); ++i) {
-            log_msg += QString("[%1: x=%2, y=%3, w=%4, h=%5] ")
-                       .arg(i)
-                       .arg(current_frame_args[i].x)
-                       .arg(current_frame_args[i].y)
-                       .arg(current_frame_args[i].width)
-                       .arg(current_frame_args[i].height);
-        }
+//         for (size_t i = 0; i < current_frame_args.size(); ++i) {
+//             log_msg += QString("[%1: x=%2, y=%3, w=%4, h=%5] ")
+//                        .arg(i)
+//                        .arg(current_frame_args[i].x)
+//                        .arg(current_frame_args[i].y)
+//                        .arg(current_frame_args[i].width)
+//                        .arg(current_frame_args[i].height);
+//         }
 
-        // Выводим в поток qCDebug. 
-        // ВНИМАНИЕ: используем .toUtc8().constData(), чтобы Qt не экранировал символы обратно в текст
-        qCDebug(category, "%s", log_msg.toUtf8().constData());
+//         // Выводим в поток qCDebug. 
+//         // ВНИМАНИЕ: используем .toUtc8().constData(), чтобы Qt не экранировал символы обратно в текст
+//         qCDebug(category, "%s", log_msg.toUtf8().constData());
 
-        last_printed_args = current_frame_args;
-    }
+//         last_printed_args = current_frame_args;
+//     }
 
-    current_frame_args.clear();
-}
+//     current_frame_args.clear();
+// }
 
 
 

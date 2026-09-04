@@ -340,21 +340,21 @@ private:
     void flush_overlay();
 
     // 1. Объявляем структуру
-    struct BlitArgs {
-        int x;
-        int y;
-        int width;
-        int height;
+    // struct BlitArgs {
+    //     int x;
+    //     int y;
+    //     int width;
+    //     int height;
 
-        bool operator==(const BlitArgs& other) const {
-            return x == other.x && y == other.y && width == other.width && height == other.height;
-        }
-    }; // !!! ВОТ ЭТУ СКОБКУ С ТОЧКОЙ В НАЧАЛЕ ВЫ ПРОПУСТИЛИ !!!
+    //     bool operator==(const BlitArgs& other) const {
+    //         return x == other.x && y == other.y && width == other.width && height == other.height;
+    //     }
+    // }; // !!! ВОТ ЭТУ СКОБКУ С ТОЧКОЙ В НАЧАЛЕ ВЫ ПРОПУСТИЛИ !!!
 
     // 2. Теперь объявляем члены самого класса Layout
-    void flush_blit_logs(); 
-    std::vector<BlitArgs> current_frame_args;  // Теперь принадлежит Layout
-    std::vector<BlitArgs> last_printed_args;   // Теперь принадлежит Layout
+    // void flush_blit_logs(); 
+    // std::vector<BlitArgs> current_frame_args;  // Теперь принадлежит Layout
+    // std::vector<BlitArgs> last_printed_args;   // Теперь принадлежит Layout
 
 
 
