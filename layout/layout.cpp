@@ -100,7 +100,7 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
             q_image_cache_file.fill(Qt::black); 
         }
     
-   // Запуск однократного таймера на 500 мс (чтобы система успела загрузиться)
+   // Запуск однократного таймера на 1000 мс (чтобы система успела загрузиться)
    // Добавляем mtvsystem (или переменную, в которой лежит указатель) в квадратные скобки
    // 1. Через 1 секунду после старта включаем флаг сообщения
     // 1. Сразу при вызове (на старте) красим в зеленый цвет
@@ -112,7 +112,8 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
         }
 
         // Принудительно рисуем оверлей, пока цвет m_highlightColor еще ЗЕЛЕНЫЙ
-        this->draw_message_box_overlay(this->m_highlightColor);
+        //this->draw_message_box_overlay(this->m_highlightColor);
+        //this->m_highlightColor = Qt::green;
 
         // 2. Запускаем второй таймер на 5 секунд
         QTimer::singleShot(5000, this, [this, mtvsystem]() {
@@ -124,6 +125,9 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
             this->m_highlightColor = Qt::black;
 
             // Перерисовываем оверлей уже в черном цвете (или скрываем его)
+            // this->draw_message_box_overlay(this->m_highlightColor);
+
+            // Вызываем отрисовку — функция сама поймет, что флаг false, и скроет текст
             this->draw_message_box_overlay(this->m_highlightColor);
         });
     });
@@ -2878,6 +2882,17 @@ void Layout::readAudioLevelsFile() {
 void Layout::draw_message_box_overlay(const QColor &color)
 {
     if (q_image_cache_file.isNull()) return;
+
+    // Скрываем текст, если система говорит, что сообщения больше нет
+    if (mtvsystem && !mtvsystem->mess_exist) {
+        // Очищаем кэш изображения, делая его полностью прозрачным
+        q_image_cache_file.fill(Qt::transparent); 
+        
+        // Быстро отправляем пустую (очищенную) картинку на экран, чтобы текст исчез
+        PbxMtvSystem::darken_area_t dark_zone; 
+        mtvsystem->draw_overlay_fast(&q_image_cache_file, dark_zone.dark_left, dark_zone.dark_top, true);
+        return; // Выходим из функции, ничего не рисуя поверх!
+    }
 
     QString currentMessage = get_network_setting();
 
