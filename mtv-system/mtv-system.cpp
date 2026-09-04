@@ -1269,10 +1269,8 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
     for (int y = 0; y < image->height(); ++y) {
         int screen_y = y + offset_y;
         uint8_t * row_start_address = start_address + (screen_y * row_stride);
-        uint8_t * current_row_with_offset = row_start_address + (offset_x * 3);
+        uint8_t * current_row_with_offset = row_start_address + (offset_x * 3);        
         
-        // convert_line(image, y, image->width(), current_row_with_offset);
-        // convert_line(image, y, image->width(), current_row_with_offset, false, aligned_offset_x, screen_y);
         convert_line(image, y, img_w, current_row_with_offset, false, aligned_offset_x, screen_y, m_msgImageCache);        
         
     }
