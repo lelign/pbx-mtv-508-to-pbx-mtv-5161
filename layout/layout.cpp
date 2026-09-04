@@ -100,33 +100,25 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
             q_image_cache_file.fill(Qt::black); 
         }
     
-   // Запуск однократного таймера на 1000 мс (чтобы система успела загрузиться)
-   // Добавляем mtvsystem (или переменную, в которой лежит указатель) в квадратные скобки
-   // 1. Через 1 секунду после старта включаем флаг сообщения
+    // Запуск однократного таймера на 1000 мс (чтобы система успела загрузиться)
+    // Добавляем mtvsystem (или переменную, в которой лежит указатель) в квадратные скобки
+    // 1. Через 1 секунду после старта включаем флаг сообщения
     // 1. Сразу при вызове (на старте) красим в зеленый цвет
     this->m_highlightColor = Qt::green; // Использовать Qt::green безопаснее, чем строку "green"
-
     QTimer::singleShot(1000, this, [this, mtvsystem]() {
         if (mtvsystem) {
             mtvsystem->mess_exist = true;            
         }
-
-        // собственно надпись нарисует 
+        // собственно надпись нарисует draw_message_box_overlay привязан к analog_clock
         //this->draw_message_box_overlay(this->m_highlightColor);
         //this->m_highlightColor = Qt::green;
-
         // 2. Запускаем второй таймер на 5 секунд
         QTimer::singleShot(5000, this, [this, mtvsystem]() {
             if (mtvsystem) {
                 mtvsystem->mess_exist = false;
             }
 
-            // ТОЛЬКО ЗДЕСЬ (через 5 секунд) меняем цвет на черный!
-            // this->m_highlightColor = Qt::black;
-
-            // Перерисовываем оверлей уже в черном цвете (или скрываем его)
-            // this->draw_message_box_overlay(this->m_highlightColor);
-
+            // ТОЛЬКО ЗДЕСЬ (через 5 секунд) 
             // Вызываем отрисовку — функция сама поймет, что флаг false, и скроет текст            
             this->draw_message_box_overlay(this->m_highlightColor, this->trouble);
         });
@@ -136,37 +128,8 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
 
     ini_alarm_time_threshold();
     hdmi_color = 1;
-
-    // Инициализируем массив 64 каналов
-    for (int i = 0; i < 64; ++i) {
-        m_channelLevels.append(0.0);
-    }
-
-    // Настраиваем таймер на 100 мс
-
-
-    
-    // m_timer = new QTimer(this);
-    
-    // m_timer->start(500);
-    // connect(m_timer, &QTimer::timeout, this, &Layout::updateMeterRoutine);
-    // m_timer->start(100); // switch off audio_meter
-
-    // Первичное чтение данных (эмулятор)
-    //  readAudioLevelsFile();   // switch off audio_meter
-
-    // qCDebug(category) << ANSI_GREEN << "SizeOfArray(layout_object)" << SizeOfArray(layout_object) << ANSI_RESET;
-    // for(uint i = 0; i < SizeOfArray(layout_object); i++){           
-    //         qCDebug(category) << ANSI_GREEN << "before setting read layout_object[i].sdi_label" 
-    //         << layout_object[i].sdi_label ;
-    //     }
-    
+      
     Settings_Read();
-
-    // for(uint i = 0; i < SizeOfArray(layout_object); i++){           
-    //     qCDebug(category) << ANSI_GREEN << "after setting read layout_object[i].sdi_label" 
-    //     << layout_object[i].sdi_label << ANSI_RESET;
-    // }
 
     gpio->set_mode(gpio_mode);
     preset_Layout_Read(layout_preset.index);
@@ -375,7 +338,8 @@ void Layout::check_freeze(int cell_index)
 int error, error_old;
 
     error = 0;
-    int k = cascade.num * 8 + cell_index;
+    // int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
     if(layout_object[k].cell.video_alarm.enable){
        error = !mtvsystem->get_motion(cell_index);
 
@@ -449,7 +413,7 @@ QJsonObject json;
 QJsonObject data_obj;
 
     if(cascade.mode != Layout::CASCADE_SLAVE) return;
-    if(!cascade.last_slave_device && (solo_mode.input == 7)) return;
+    if(!cascade.last_slave_device && (solo_mode.input == 15)) return;
 
     data_obj["category"] = category;
     data_obj["message" ] = message;
@@ -479,7 +443,8 @@ void Layout::check_audio(int cell_index, QList<int> level_list)
 int error, error_old;
 
     error = 0;
-    int k = cascade.num * 8 + cell_index;
+    // int k = cascade.num * 8 + cell_index;
+    int k = cascade.num * 16 + cell_index;
 
     if(layout_object[k].cell.audio_alarm.enable){
         for(int i = 0; i < 4; i++){
@@ -609,7 +574,8 @@ void Layout::slot_new_format()
     update_alarm();
 
     for(int i = 0; i < 16; ++i){
-        int k = cascade.num * 8 + i;
+        // int k = cascade.num * 8 + i;
+        int k = cascade.num * 16 + i;
         layout_object[k].sdi_format_str = mtvsystem->get_sdi_format_str(i);
 
         int state = mtvsystem->get_sdi_status(i);
@@ -669,7 +635,8 @@ int x, y;
 
 void Layout::update_sdi_format(int index)
 {
-    int k = cascade.num * 8 + index;
+    // int k = cascade.num * 8 + index;
+    int k = cascade.num * 16 + index;
     if(!layout_object[k].screen_plan.enable_video) return;
     if(!layout_object[k].cell.sdi_format_display)  return;
     if(teletext_cell.enable && (k == 0)) return;
@@ -710,8 +677,7 @@ void Layout::blit_to_frame(QImage *image, int x, int y)
         current_frame_args.push_back(args);
     }
 
-    // 2. Ваш оригинальный код отрисовки
-    QPainter painter(&full_overlay_frame);
+     QPainter painter(&full_overlay_frame);
     // Source, а не SourceOver: полностью ЗАМЕЩАЕТ пиксели и альфа-канал в этом
     // прямоугольнике, включая обнуление альфы там, где рисуемая картинка прозрачна.
     // Это и есть механизм "очистки" старого содержимого региона.
@@ -842,9 +808,7 @@ int Layout::draw_text_icon(QImage &image,  QRect panel, QString text)
 void Layout::draw_old_style_text_panel(QImage &image,  QRect panel, QFont font, QString text)
 {
      QFontMetrics fm(font);
-    //  float factor = (float)panel.width() / (float)fm.width(text); // deprecated
      float factor = (float)panel.width() / (float)fm.horizontalAdvance(text);
-
 
      if(factor < 1) // уменьшать текст если он шире окна
         font.setPointSize(font.pointSize() * factor - 1);
@@ -900,7 +864,8 @@ void Layout::draw_transparant_text_panel(QImage &image,  QRect panel, int FontSi
 
 void Layout::disable_all_audio_meters()
 {
-    for(int i = 0; i < 8; ++i) {
+    // for(int i = 0; i < 8; ++i) {
+    for(int i = 0; i < 16; ++i) {
         mtvsystem->bars_configure(i, 0, 0, 0, 0, 0, 0);
     }
 }
@@ -911,7 +876,8 @@ void Layout::update_layout()
     gpio->set_mode(gpio_mode);
     cascade_udate();
     draw_overlay();
-    for(int i = 0; i < 8; ++i){
+    // for(int i = 0; i < 8; ++i){
+     for(int i = 0; i < 16; ++i){
         pip_config(i);
     }
 
@@ -921,8 +887,10 @@ void Layout::update_layout()
 
     slot_qpps(); // для быстрого появления часов
 
-    for(int i = 0; i < 8; ++i){
-        int k = cascade.num * 8 + i;
+    // for(int i = 0; i < 8; ++i){
+    //     int k = cascade.num * 8 + i;
+    for(int i = 0; i < 16; ++i){
+        int k = cascade.num * 16 + i;
         DisplayTALLY(k, layout_object[k].tally);
     }
 }
@@ -930,10 +898,13 @@ void Layout::update_layout()
 
 void Layout::sound_routing()
 {
-    if(cascade.num != (solo_mode.input >> 3))
-        mtvsystem->set_audio_source(7);
+    // if(cascade.num != (solo_mode.input >> 3))
+    //     mtvsystem->set_audio_source(7);
+    if(cascade.num != (solo_mode.input >> 4)) // ??
+        mtvsystem->set_audio_source(15);
     else
-        mtvsystem->set_audio_source(solo_mode.input & 0x07);
+        // mtvsystem->set_audio_source(solo_mode.input & 0x07);
+        mtvsystem->set_audio_source(solo_mode.input & 0x0F);
 }
 
 void Layout::cascade_udate()
@@ -955,16 +926,20 @@ void Layout::cascade_mode_update()
     if(cascade.mode == STAND_ALONE) return;
     if(cascade.last_slave_device)   return; // последний в цепочке. 8-й как обычный вход
 
-    // 8-й вход на весь экран
-    mtvsystem->configure_image(7, 1920, 1080, 0, 0, 1);
+    // // 8-й вход на весь экран
+    // mtvsystem->configure_image(7, 1920, 1080, 0, 0, 1);
+    // 16-й вход на весь экран
+    mtvsystem->configure_image(15, 1920, 1080, 0, 0, 1);
 }
 
 
 void Layout::routing_source_video()
 {
-static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+// static int format[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+static int format[16] = {-1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1};
 
-    for(int i = 0; i < 8; ++i){
+    // for(int i = 0; i < 8; ++i){
+    for(int i = 0; i < 16; ++i){
         if(format[i] != mtvsystem->get_sdi_format(i)){
             format[i] = mtvsystem->get_sdi_format(i);
             pip_config(i);
@@ -1064,7 +1039,7 @@ int x1, x2;
 QString Layout::sdi_key_name(int i) // increased to 16 channels
 {
     // Сдвиг на 4 бита вправо (i >> 4) — это быстрое деление на 16 нацело.
-    int major = (i >>   4) + 1;    
+    int major = (i >> 4) + 1;    
     // Маска 0x0F (в двоичной системе 00001111) — это взятие остатка от деления на 16 (i % 16).
     // Результат будет от 0 до 15. Прибавляем 1, чтобы получить каналы от 1 до 16.
     int minor = (i & 0x0F) + 1;    
@@ -1817,7 +1792,7 @@ void Layout::slot_draw_analog_clock_tick()
     // 3. СИНХРОННЫЙ ВЫВОД ПЛАШКИ ПОВЕРХ ВСЕГО
     // =================================================================
     if (mtvsystem->mess_exist) {       
-        // Вызываем рисование текста
+        // Вызываем рисование текста сообщения поверх всего
         this->draw_message_box_overlay(m_highlightColor, trouble);
     }   
 }
