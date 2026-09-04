@@ -127,8 +127,7 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
             // Перерисовываем оверлей уже в черном цвете (или скрываем его)
             // this->draw_message_box_overlay(this->m_highlightColor);
 
-            // Вызываем отрисовку — функция сама поймет, что флаг false, и скроет текст
-            
+            // Вызываем отрисовку — функция сама поймет, что флаг false, и скроет текст            
             this->draw_message_box_overlay(this->m_highlightColor, this->trouble);
         });
     });
@@ -1810,46 +1809,17 @@ QString date_str;
 
 void Layout::slot_draw_analog_clock_tick()
 {
-    // Пока выбран стиль "аналоговые часы" - перерисовываем чаще 1 раза в секунду,
-    // чтобы секундная стрелка двигалась плавно, а не "прыжками".
-    // =================================================================
-    // 1. ОПТИМИЗИРОВАННАЯ ПРОВЕРКА ФАЙЛА (Раз в 500 мс вместо 50 мс)
-    // =================================================================
-    m_fileCheckCounter++;
-    if (m_fileCheckCounter >= 10) { // 10 тиков по 50 мс = 500 миллисекунд 40 > 2 sec
-        m_fileCheckCounter = 0;     // Сбрасываем счетчик
-        
-        const QString filePath = "message.txt";
-        QFile file(filePath);
-        if (file.open(QIODevice::ReadOnly | QIODevice::Text)) {
-            QTextStream in(&file);
-            // Сохраняем строку в переменную класса, откуда её заберет draw_message_box_overlay
-            m_lastCachedMessage = in.readAll().trimmed(); 
-            file.close();
-            
-            mtvsystem->mess_exist = !m_lastCachedMessage.isEmpty();
-        }
-    }
-
-
+    
     if(!clock_cell.style)
         draw_analog_clock();
 
     // =================================================================
     // 3. СИНХРОННЫЙ ВЫВОД ПЛАШКИ ПОВЕРХ ВСЕГО
     // =================================================================
-    if (mtvsystem->mess_exist) {
-        // Создаем или очищаем холст кэша
-        
-        //dark_zone.dark_right - dark_zone.dark_left
-        //const int dark_w = 1720;
-        // const int dark_h = 200;       
-       
+    if (mtvsystem->mess_exist) {       
         // Вызываем рисование текста
         this->draw_message_box_overlay(m_highlightColor, trouble);
-    }
-
-    
+    }   
 }
 
 void Layout::draw_analog_clock()
@@ -1936,7 +1906,6 @@ void Layout::draw_analog_clock()
     // изменение стрелок в пределах ~16мс благодаря slot_fps_hardware_trigger().
     mtvsystem->draw_overlay_fast(&image_clock, clock_rec.x(), clock_rec.y(), false);
 }
-
 
 void Layout::draw_frame(QImage &image, QColor color, QRect boundary, int width)
 {
