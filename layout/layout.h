@@ -366,7 +366,8 @@ private:
     QTimer *m_timer;
     QList<double> m_channelLevels;
     QColor m_highlightColor;
-    void draw_message_box_overlay(const QColor &color);
+    QString trouble;
+    void draw_message_box_overlay(const QColor &color, QString trouble);
 
     int m_fileCheckCounter = 0; // Переменная для пропуска тактов таймера
     QImage m_cachedTextImage;    // Кэш для картинки с текстом (message.txt)

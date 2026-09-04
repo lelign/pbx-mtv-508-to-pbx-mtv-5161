@@ -111,7 +111,7 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
             mtvsystem->mess_exist = true;            
         }
 
-        // Принудительно рисуем оверлей, пока цвет m_highlightColor еще ЗЕЛЕНЫЙ
+        // собственно надпись нарисует 
         //this->draw_message_box_overlay(this->m_highlightColor);
         //this->m_highlightColor = Qt::green;
 
@@ -122,13 +122,14 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
             }
 
             // ТОЛЬКО ЗДЕСЬ (через 5 секунд) меняем цвет на черный!
-            this->m_highlightColor = Qt::black;
+            // this->m_highlightColor = Qt::black;
 
             // Перерисовываем оверлей уже в черном цвете (или скрываем его)
             // this->draw_message_box_overlay(this->m_highlightColor);
 
             // Вызываем отрисовку — функция сама поймет, что флаг false, и скроет текст
-            this->draw_message_box_overlay(this->m_highlightColor);
+            
+            this->draw_message_box_overlay(this->m_highlightColor, this->trouble);
         });
     });
 
@@ -1845,7 +1846,7 @@ void Layout::slot_draw_analog_clock_tick()
         // const int dark_h = 200;       
        
         // Вызываем рисование текста
-        this->draw_message_box_overlay(m_highlightColor);
+        this->draw_message_box_overlay(m_highlightColor, trouble);
     }
 
     
@@ -2879,7 +2880,7 @@ void Layout::readAudioLevelsFile() {
 }
 
 
-void Layout::draw_message_box_overlay(const QColor &color)
+void Layout::draw_message_box_overlay(const QColor &color, QString trouble)
 {
     if (q_image_cache_file.isNull()) return;
 
@@ -2894,9 +2895,9 @@ void Layout::draw_message_box_overlay(const QColor &color)
         return; // Выходим из функции, ничего не рисуя поверх!
     }
 
-    QString currentMessage = get_network_setting();
+    QString profitt_IP_MAC = get_network_setting();
 
-    if (!currentMessage.isEmpty()) {
+    if (!profitt_IP_MAC.isEmpty()) {
         QPainter painter(&q_image_cache_file);
         painter.setRenderHint(QPainter::Antialiasing);
         painter.setRenderHint(QPainter::TextAntialiasing);
@@ -2915,14 +2916,17 @@ void Layout::draw_message_box_overlay(const QColor &color)
         // для встраиваемых систем — отрисовать текст со смещением на 2 пикселя во все стороны
         painter.setPen(Qt::black);
         int offset = 2;
-        painter.drawText(rect.adjusted(-offset, -offset, -offset, -offset), flags, currentMessage);
-        painter.drawText(rect.adjusted(offset, -offset, offset, -offset), flags, currentMessage);
-        painter.drawText(rect.adjusted(-offset, offset, -offset, offset), flags, currentMessage);
-        painter.drawText(rect.adjusted(offset, offset, offset, offset), flags, currentMessage);
+        painter.drawText(rect.adjusted(-offset, -offset, -offset, -offset), flags, profitt_IP_MAC);
+        painter.drawText(rect.adjusted(offset, -offset, offset, -offset), flags, profitt_IP_MAC);
+        painter.drawText(rect.adjusted(-offset, offset, -offset, offset), flags, profitt_IP_MAC);
+        painter.drawText(rect.adjusted(offset, offset, offset, offset), flags, profitt_IP_MAC);
+        if (color != Qt::green){
+            painter.drawText(rect.adjusted(offset, offset, offset, offset), flags, trouble);
+        }
 
         // 3. РИСУЕМ БЕЛОЕ ТЕЛО БУКВ ПОВЕРХ
         painter.setPen(color);
-        painter.drawText(rect, flags, currentMessage);
+        painter.drawText(rect, flags, profitt_IP_MAC);
 
         painter.end();
     }
