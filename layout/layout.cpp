@@ -90,7 +90,45 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
 
     timer_analog_clock.start(50); // 10 (20) Гц — достаточно, чтобы секундная стрелка выглядела "скользящей"
     connect(&timer_analog_clock, &QTimer::timeout, this, &Layout::slot_draw_analog_clock_tick);
+
+    // подготовка сообщений
     
+    PbxMtvSystem::darken_area_t dark_zone;
+    if (q_image_cache_file.size() != QSize(dark_zone.dark_right - dark_zone.dark_left, dark_zone.dark_bottom - dark_zone.dark_top)) {
+            q_image_cache_file = QImage(dark_zone.dark_right - dark_zone.dark_left, dark_zone.dark_bottom - dark_zone.dark_top, QImage::Format_ARGB32);
+             // Заполняем черным цветом — это будет базовая подложка, если виджеты не перекроют всю зону
+            q_image_cache_file.fill(Qt::black); 
+        }
+    
+   // Запуск однократного таймера на 500 мс (чтобы система успела загрузиться)
+   // Добавляем mtvsystem (или переменную, в которой лежит указатель) в квадратные скобки
+   // 1. Через 1 секунду после старта включаем флаг сообщения
+    // 1. Сразу при вызове (на старте) красим в зеленый цвет
+    this->m_highlightColor = Qt::green; // Использовать Qt::green безопаснее, чем строку "green"
+
+    QTimer::singleShot(1000, this, [this, mtvsystem]() {
+        if (mtvsystem) {
+            mtvsystem->mess_exist = true;            
+        }
+
+        // Принудительно рисуем оверлей, пока цвет m_highlightColor еще ЗЕЛЕНЫЙ
+        this->draw_message_box_overlay(this->m_highlightColor);
+
+        // 2. Запускаем второй таймер на 5 секунд
+        QTimer::singleShot(5000, this, [this, mtvsystem]() {
+            if (mtvsystem) {
+                mtvsystem->mess_exist = false;
+            }
+
+            // ТОЛЬКО ЗДЕСЬ (через 5 секунд) меняем цвет на черный!
+            this->m_highlightColor = Qt::black;
+
+            // Перерисовываем оверлей уже в черном цвете (или скрываем его)
+            this->draw_message_box_overlay(this->m_highlightColor);
+        });
+    });
+
+      
 
     ini_alarm_time_threshold();
     hdmi_color = 1;
@@ -1797,19 +1835,13 @@ void Layout::slot_draw_analog_clock_tick()
     // =================================================================
     if (mtvsystem->mess_exist) {
         // Создаем или очищаем холст кэша
-        PbxMtvSystem::darken_area_t dark_zone;
+        
         //dark_zone.dark_right - dark_zone.dark_left
         //const int dark_w = 1720;
-        // const int dark_h = 200;
-        if (q_image_cache_file.size() != QSize(dark_zone.dark_right - dark_zone.dark_left, dark_zone.dark_bottom - dark_zone.dark_top)) {
-            q_image_cache_file = QImage(dark_zone.dark_right - dark_zone.dark_left, dark_zone.dark_bottom - dark_zone.dark_top, QImage::Format_ARGB32);
-             // Заполняем черным цветом — это будет базовая подложка, если виджеты не перекроют всю зону
-            q_image_cache_file.fill(Qt::black); 
-
-        }
+        // const int dark_h = 200;       
        
         // Вызываем рисование текста
-        this->draw_message_box_overlay();
+        this->draw_message_box_overlay(m_highlightColor);
     }
 
     
@@ -2843,7 +2875,7 @@ void Layout::readAudioLevelsFile() {
 }
 
 
-void Layout::draw_message_box_overlay()
+void Layout::draw_message_box_overlay(const QColor &color)
 {
     if (q_image_cache_file.isNull()) return;
 
@@ -2874,7 +2906,7 @@ void Layout::draw_message_box_overlay()
         painter.drawText(rect.adjusted(offset, offset, offset, offset), flags, currentMessage);
 
         // 3. РИСУЕМ БЕЛОЕ ТЕЛО БУКВ ПОВЕРХ
-        painter.setPen(Qt::white);
+        painter.setPen(color);
         painter.drawText(rect, flags, currentMessage);
 
         painter.end();

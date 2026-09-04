@@ -58,7 +58,7 @@ public:
 
         PbxMtvSystem();
         ~PbxMtvSystem();
-        bool mess_exist = false;
+        bool mess_exist;// = false;
         // структура затемненной области
         struct darken_area_t {
                 int dark_top = 440;
