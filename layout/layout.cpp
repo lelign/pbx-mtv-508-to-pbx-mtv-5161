@@ -2853,6 +2853,7 @@ void Layout::draw_message_box_overlay(const QColor &color, QString trouble)
         // Быстро отправляем пустую (очищенную) картинку на экран, чтобы текст исчез
         PbxMtvSystem::darken_area_t dark_zone; 
         mtvsystem->draw_overlay_fast(&q_image_cache_file, dark_zone.dark_left, dark_zone.dark_top, true);
+        mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);
         return; // Выходим из функции, ничего не рисуя поверх!
     }
 
@@ -2894,6 +2895,8 @@ void Layout::draw_message_box_overlay(const QColor &color, QString trouble)
 
     PbxMtvSystem::darken_area_t dark_zone; 
     mtvsystem->draw_overlay_fast(&q_image_cache_file, dark_zone.dark_left, dark_zone.dark_top, true);
+    
+    mtvsystem->draw_overlay_fast(&full_overlay_frame, 0, 0, false);
 }
 
 

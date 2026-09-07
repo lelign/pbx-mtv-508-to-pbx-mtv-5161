@@ -30,3 +30,10 @@ temporary/layout.cpp
 temporary/layout.h
 temporary/mtv-system.cpp
 temporary/mtv-system.h
+back_up_1/layout.h
+back_up_1/layout.cpp
+.gitignore
+layout/layout_and_audio_meter/layout_try_add_alpha_res_the_same_v3.cpp
+layout/layout_and_audio_meter/layout_try_add_alpha_res_the_same_v3.cpp
+back_up_1/mtv-system.h
+layout/layout_and_audio_meter/layout.cpp
