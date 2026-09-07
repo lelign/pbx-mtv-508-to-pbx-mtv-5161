@@ -1123,18 +1123,22 @@ const int16_t uint8_crcb_b_data[] = {
 /*Мы возвращаем в convert_line чтение из m_cachedTextImage, но используем оригинальный указатель.
  Чтобы convert_line знала, где находится текст, мы передаем в неё указатель на картинку сообщения.*/
 
-void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer, bool darken, int screen_x_start, int screen_y, QImage * cacheImg) {
+void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer, bool darken, int screen_x_start, int screen_y, QImage * cacheImg) 
+{
+    
     uint8_t * dst = buffer;
     const uint8_t * line = img->constScanLine(y);
 
-    // Коэффициенты BT.601
-    uint16x8_t y_r = vmovq_n_u16(77); uint16x8_t y_g = vmovq_n_u16(150); uint16x8_t y_b = vmovq_n_u16(29);
-    int16x8_t cb_r = vmovq_n_s16(-43); int16x8_t cb_g = vmovq_n_s16(-85); int16x8_t cb_b = vmovq_n_s16(128);
-    int16x8_t cr_r = vmovq_n_s16(128); int16x8_t cr_g = vmovq_n_s16(-107); int16x8_t cr_b = vmovq_n_s16(-21);
+    //  объявляем векторы с целочисленными коэффициентами для перевода RGB в YUV по стандарту BT.601
+    // vmovq_n_u16(77) <= вектор, полностью забитый числом 77, чтобы обрабатывать по 8 пикселей одновременно
+    uint16x8_t y_r = vmovq_n_u16(77); uint16x8_t y_g = vmovq_n_u16(150); uint16x8_t y_b = vmovq_n_u16(29); // Y
+    int16x8_t cb_r = vmovq_n_s16(-43); int16x8_t cb_g = vmovq_n_s16(-85); int16x8_t cb_b = vmovq_n_s16(128); // Cb
+    int16x8_t cr_r = vmovq_n_s16(128); int16x8_t cr_g = vmovq_n_s16(-107); int16x8_t cr_b = vmovq_n_s16(-21); // Cr
 
     darken_area_t dark_zone;
 
     int x = 0;
+    // Конструкция width & ~7 отсекает остаток строки, делящийся на 8
     int vector_width = width & ~7; 
 
     // Проверяем попадание строки в зону плашки по Y
@@ -1155,12 +1159,20 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
 
     int dark_zone_width = dark_zone.dark_right - dark_zone.dark_left;
         for(; x < vector_width; x += 8) {
+                // (Загрузка данных): Извлекает из памяти 8 пикселей. Формат ARGB 
+                // разделяется на  4 независимых вектора по цветовым каналам: 
+                // rgb_data.val[0] — Синий, 
+                //          val[1] — Зеленый, 
+                //          val[2] — Красный, 
+                //          val[3] — Альфа.
                 uint8x8x4_t rgb_data = vld4_u8(line + x * 4);
                 uint16x8_t r_u = vmovl_u8(rgb_data.val[2]);
                 uint16x8_t g_u = vmovl_u8(rgb_data.val[1]);
                 uint16x8_t b_u = vmovl_u8(rgb_data.val[0]);
 
                 // Рассчитываем стандартный YUV
+                // Вычисляем яркость (Y\ и цветовые компоненты (Cb/Cr)
+                // с помощью векторного перемножения и сложения за минимальное количество тактов процессора.
                 uint16x8_t y_acc = vmulq_u16(r_u, y_r);
                 y_acc = vmlaq_u16(y_acc, g_u, y_g);
                 y_acc = vmlaq_u16(y_acc, b_u, y_b);
@@ -1181,25 +1193,36 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
                 uint8x8x3_t out_data;
                 out_data.val[0] = vzip_u8(cb_down, cr_down).val[0]; 
                 out_data.val[1] = y_val; 
+                // Управление прозрачностью: Если флаг darken равен true, 
+                // альфа-канал принудительно забивается непрозрачным цветом vmov_n_u8(255)
                 out_data.val[2] = darken ? vmov_n_u8(255) : rgb_data.val[3]; 
 
-                // ИСПРАВЛЕНИЕ ВСПЫШЕК:
-                // Если это обычный виджет (!darken) и горит сообщение, и мы находимся внутри зоны плашки по Y,
-                // мы НЕ пишем данные на экран дисплея (пропускаем vst3_u8 для dst).
-                // Таким образом яркий таймер физически не успеет «моргнуть» на экране!
+                // Критически важный блок: ИСПРАВЛЕНИЕ ВСПЫШЕК:
+                // Если на экране горит системное сообщение (this->mess_exist), а функция вызвана для отрисовки 
+                // обычного виджета (!darken) внутри темной зоны (is_y_inside_dark_zone), инструкция vst3_u8 пропускается.
+                // Данные этого виджета физически не записываются в текущий кадр дисплея. 
+                // Это исключает мигание и артефакты, когда виджет и подложка пытаются одновременно перерисовать 
+                // одну и ту же область экрана.
                 if (darken || !this->mess_exist || !is_y_inside_dark_zone) {
                 vst3_u8(dst, out_data);
                 }
                 dst += 24;
 
-                // НАКОПЛЕНИЕ КЭША ОСТАЕТСЯ БЕЗ ИЗМЕНЕНИЙ
+                // НАКОПЛЕНИЕ КЭША
+                // Если строка пересекается с затемненной плашкой и передан cacheImg, код на лету формирует кэш-картинку:
                 if (cache_line) {
+                        // Векторная маска (m_inside): С помощью vcgeq_u16 (больше или равно) и vcltq_u16 (меньше) 
+                        // вычисляются глобальные координаты X для каждого из 8 пикселей. 
+                        // Проверяется, какие из них попадают внутрь dark_left и dark_right
                         uint16x8_t v_abs_x = vaddq_u16(vmovq_n_u16(screen_x_start + x), v_x_offsets);
                         uint16x8_t m_left = vcgeq_u16(v_abs_x, v_dark_left);
                         uint16x8_t m_right = vcltq_u16(v_abs_x, v_dark_right);
                         uint16x8_t m_inside = vandq_u16(m_left, m_right);
                         uint8x8_t m_inside_u8 = vmovn_u16(m_inside);
 
+                        // Затемнение пикселей: Операция vshrn_n_u16(r_u, 1) сдвигает биты вправо на 1. 
+                        // В бинарной математике это быстрое деление на 2. 
+                        // То есть цвета RGB исходного изображения становятся в два раза темнее.
                         uint8x8_t r_half = vshrn_n_u16(r_u, 1);
                         uint8x8_t g_half = vshrn_n_u16(g_u, 1);
                         uint8x8_t b_half = vshrn_n_u16(b_u, 1);
@@ -1208,11 +1231,16 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
                         if (cache_x >= 0 && (cache_x + 8) <= dark_zone_width) {
                                 uint8x8x4_t current_cache = vld4_u8(cache_line + cache_x * 4);
                                 uint8x8x4_t out_cache;
+                                // Битовый выбор (vbsl_u8): Инструкция Vector Bitwise Select на основе ранее созданной маски 
+                                // решает:
+                                // Если пиксель внутри зоны — записать в кэш деленный пополам (затемненный) цвет.
+                                // Если пиксель вне зоны — сохранить старый пиксель из кэша (current_cache).
                                 out_cache.val[2] = vbsl_u8(m_inside_u8, r_half, current_cache.val[2]); 
                                 out_cache.val[1] = vbsl_u8(m_inside_u8, g_half, current_cache.val[1]); 
                                 out_cache.val[0] = vbsl_u8(m_inside_u8, b_half, current_cache.val[0]); 
                                 out_cache.val[3] = vmov_n_u8(255); 
 
+                                // Измененные пиксели сохраняются обратно в структуру cacheImg.
                                 vst4_u8(cache_line + cache_x * 4, out_cache);
                         }
                 }

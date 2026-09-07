@@ -25,3 +25,8 @@ qt-app/qt_binary/qt-app_colored_v1
 qt-app/qt_binary/qt-app_gray_gradient
 qt-app/qt_binary/qt-app_one_white_line
 qt-app/qt_binary/qt-app-4-white-lines
+mtv-system/temp_mtv-system.cpp
+temporary/layout.cpp
+temporary/layout.h
+temporary/mtv-system.cpp
+temporary/mtv-system.h
