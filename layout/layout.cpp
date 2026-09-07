@@ -2845,14 +2845,18 @@ void Layout::draw_message_box_overlay(const QColor &color, QString trouble)
 {
     if (q_image_cache_file.isNull()) return;
 
+    PbxMtvSystem::darken_area_t dark; 
+    // Вычисляем ширину и высоту на основе структуры
+    int crop_width = dark.dark_right - dark.dark_left;   // 1820 - 100 = 1720 пикселей
+    int crop_height = dark.dark_bottom - dark.dark_top;  // 640 - 440 = 200 пикселей
     // Скрываем текст, если система говорит, что сообщения больше нет
     if (mtvsystem && !mtvsystem->mess_exist) {
         // Очищаем кэш изображения, делая его полностью прозрачным
         q_image_cache_file.fill(Qt::transparent); 
         
         // Быстро отправляем пустую (очищенную) картинку на экран, чтобы текст исчез
-        PbxMtvSystem::darken_area_t dark_zone; 
-        mtvsystem->draw_overlay_fast(&q_image_cache_file, dark_zone.dark_left, dark_zone.dark_top, true);
+        
+        mtvsystem->draw_overlay_fast(&q_image_cache_file, dark.dark_left, dark.dark_top, true);
         mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);
         return; // Выходим из функции, ничего не рисуя поверх!
     }
@@ -2893,10 +2897,12 @@ void Layout::draw_message_box_overlay(const QColor &color, QString trouble)
         painter.end();
     }
 
-    PbxMtvSystem::darken_area_t dark_zone; 
-    mtvsystem->draw_overlay_fast(&q_image_cache_file, dark_zone.dark_left, dark_zone.dark_top, true);
     
-    mtvsystem->draw_overlay_fast(&full_overlay_frame, 0, 0, false);
+    mtvsystem->draw_overlay_fast(&q_image_cache_file, dark.dark_left, dark.dark_top, true);
+    
+    //mtvsystem->draw_overlay_fast(&full_overlay_frame, 0, 0, false);
+    QImage croppedCanvas = full_overlay_frame.copy(dark.dark_left, dark.dark_top, crop_width, crop_height);
+    mtvsystem->draw_overlay_fast(&croppedCanvas, dark.dark_left, dark.dark_top, false);
 }
 
 
