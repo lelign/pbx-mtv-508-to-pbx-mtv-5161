@@ -1758,11 +1758,11 @@ void Layout::draw_analog_clock()
     const QColor second_hand_color(190, 30, 30);
 
     // Часовая - короткая и толстая
-    draw_hand(30.0 * ((time.hour() % 12) + time.minute() / 60.0), 0.50, r * 0.07, hand_color, 0.0);
+    draw_hand(30.0 * ((time.hour() % 12) + time.minute() / 60.0), 0.50, r * 0.065, hand_color, 0.0);
     // Минутная - длиннее и тоньше
-    draw_hand(6.0  * (time.minute() + sec_frac / 60.0),           0.75, r * 0.04, hand_color, 0.0);
+    draw_hand(6.0  * (time.minute() + sec_frac / 60.0),           0.75, r * 0.035, hand_color, 0.0);
     // Секундная - тонкая, с небольшим "противовесом"-хвостиком, как у настоящих часов
-    draw_hand(6.0 * sec_frac,                                     0.85, r * 0.025, second_hand_color, 0.15);
+    draw_hand(6.0 * sec_frac,                                     0.85, r * 0.020, second_hand_color, 0.15);
 
     // Ось в центре
     painter.setPen(Qt::NoPen);
