@@ -19,6 +19,13 @@
 #define GS12170_INPUT0_LOCK_MASK	0x0001
 #define GS12170_INPUT0_RATE_MASK	0x0003
 
+enum gs12170_rate_enum{
+	RATE_HD_12170 = 0,
+	RATE_3G_12170,
+	RATE_6G_12170,
+	RATE_12G_12170
+};
+
 static const char *spi_0_filename = "/dev/spidev0.0";
 static const char *spi_1_filename = "/dev/spidev0.1";
 
@@ -30,8 +37,9 @@ struct reg_value_t{
 class Hdmi_gs12170 : public QObject{
     Q_OBJECT
 public:
-    Hdmi_gs12170(const char *spi_path);
+    Hdmi_gs12170(const char *spi_path, int ch_num);
     ~Hdmi_gs12170();
+    void gs12170_update_scdc();
 
 signals:
     void gs12170_lock_rate_changed(int gs12170_rate);
@@ -51,6 +59,8 @@ private:
 	int lock_prev;
     int rate;
     int rate_prev;
+
+    int num;
 };
 
 #endif // HDMI_GS12170_H

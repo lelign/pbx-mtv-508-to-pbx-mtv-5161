@@ -15,13 +15,6 @@
 #define SN175DP_ADDR_0  0x5E
 #define SN175DP_ADDR_1  0x5D
 
-enum gs12170_rate_enum{
-	RATE_HD_12170 = 0,
-	RATE_3G_12170,
-	RATE_6G_12170,
-	RATE_12G_12170
-};
-
 static const char * i2c_filename_sn75dp = "/dev/i2c-0";
 
 class Sn75dp159 : public QObject{

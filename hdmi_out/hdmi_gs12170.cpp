@@ -36,8 +36,9 @@ QList<reg_value_t> sdi_hdmi = {
     {0x7069, 0x0187},
 };
 
-Hdmi_gs12170::Hdmi_gs12170(const char *spi_path){
+Hdmi_gs12170::Hdmi_gs12170(const char *spi_path, int ch_num){
     qCDebug(category) << "initialization gs12170 on spi_path" << spi_path;
+    num = ch_num;
 
     gs12170_spi = new Spi(spi_path, SPI_MODE_0);
     lock = lock_prev = 0;
@@ -95,18 +96,40 @@ void Hdmi_gs12170::init_gs12170(){
     gs12170_write(GS12170_SDI_AUDIO_EN_REG, 0x0007);	        //AUD_EXT_EN_OVRD_EN, AUD_EXT_1_EN, AUD_EXT_2_EN
 }
 
+void Hdmi_gs12170::gs12170_update_scdc(){
+	// reg 0x7008, SCDC_UPDATE_REG_WDATA [7..0]
+	// bit 1 - TMDS_Bit_Clock_Ratio = 1 -> 1/40; = 0 -> 1/10
+	// bit 0 - Scrambly_Enable = 1 -> scrambly enable; = 0 -> scrambly disable
+
+    uint16_t data;
+	if (rate < RATE_12G_12170) data = 0x0000;	//TMDS_Bit_Clock_Ratio = 1, Scrambly_Enable = 1
+	else data = 0x0003;	//TMDS_Bit_Clock_Ratio = 0, Scrambly_Enable = 0
+	
+	gs12170_write(0x2038, 0x00FF);
+	gs12170_write(0x7007, 0x0020);
+	gs12170_write(0x7008, data);
+	gs12170_write(0x7006, 0x0001);
+	usleep(100000);
+	gs12170_write(0x2038, 0x0000);
+
+    // qDebug() << "gs12170_update_scdc";
+}
+
 void Hdmi_gs12170::slot_update_gs12170(){
     uint16_t data;
 
     gs12170_read(GS12170_INPUT_LOCK_REG, &data);
 	lock = data & GS12170_INPUT0_LOCK_MASK;
-    // qDebug() << "GS12170_INPUT_LOCK_REG" << hex << data;
+    // if (num == 0) qDebug() << "GS12170_INPUT_LOCK" << hex << lock;
 	gs12170_read(GS12170_DATA_RATE_REP_REG, &data);
 	rate = data & GS12170_INPUT0_RATE_MASK;
-    // qDebug() << "GS12170_DATA_RATE_REP_REG" << hex << data;
+    // if (num == 0) qDebug() << "GS12170_DATA_RATE" << hex << rate;
 
     if ((lock != lock_prev) || (rate != rate_prev)){
-        emit gs12170_lock_rate_changed(rate);
+        if (lock){
+            // gs12170_update_scdc();
+            emit gs12170_lock_rate_changed(rate);
+        }
         rate_prev = rate;
         lock_prev = lock;
     }

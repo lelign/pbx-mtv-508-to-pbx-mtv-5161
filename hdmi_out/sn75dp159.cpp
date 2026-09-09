@@ -1,4 +1,5 @@
 #include <QLoggingCategory>
+#include <hdmi_out/hdmi_gs12170.h>
 #include "sn75dp159.h"
 #include <QCoreApplication>
 #include <iostream>
@@ -82,6 +83,8 @@ Sn75dp159::Sn75dp159(uint8_t i2c_addr){
     connect(timer_update_sn75dp, SIGNAL(timeout()), this, SLOT(sn75dp159_device_id_read()));
     timer_update_sn75dp->setInterval(1000);
     timer_update_sn75dp->start();
+
+    slot_sn75dp159_update(RATE_12G_12170);  //на всякий случай при включении прописываем всегда HDMI 2.0
 }
 
 Sn75dp159::~Sn75dp159(){
@@ -161,6 +164,7 @@ void Sn75dp159::sn75dp159_device_id_read(){
 
 void Sn75dp159::slot_sn75dp159_update(int rate){
     uint8_t data;
+    uint8_t flag_tdms_clock;
 	
     if (rate == RATE_12G_12170) sn75dp159_write(0x0C, 0x01);	//PRE_SEL = Reg0Ch[1:0] = 01 (labeled HDMI_TWPST)
     else sn75dp159_write(0x0C, 0xFC);							//VSWING_DATA & VSWING_CLK to -7% = Reg0Ch[7:2] = 111111
@@ -168,20 +172,27 @@ void Sn75dp159::slot_sn75dp159_update(int rate){
     sn75dp159_read(0x0B, &data);
     data &= (1 << 1);
 
-    switch (rate){
-        case RATE_12G_12170:
-        case RATE_6G_12170:
-            data |= 0x98;
-            break;
-		
+    if (data) flag_tdms_clock = 1;
+	else flag_tdms_clock = 0;
+
+    switch (rate){		
         case RATE_3G_12170:
             data |= 0x88;
+            data |= 0x01;   // DDC_TRAIN_SET=1, TMDS_CLOCK_RATIO_STATUS=0 -> форс HDMI1.4b/DVI (1/10)
             break;
 		
         case RATE_HD_12170:
             data |= 0x80;
+            data |= 0x01;   // DDC_TRAIN_SET=1, TMDS_CLOCK_RATIO_STATUS=0 -> форс HDMI1.4b/DVI (1/10)
+            break;
+
+        default:
+            data |= 0x98;
+            data |= 0x03;   // DDC_TRAIN_SET=1, TMDS_CLOCK_RATIO_STATUS=1 -> форс HDMI2.0 (1/40)
             break;
     }
-    sn75dp159_write(0x0B, data);	//TX_TERM_CTL = Reg0Bh[4:3] = 11, SLEW_CTL = Reg0Bh[7:6] = 10
+    sn75dp159_write(0x0B, data);
     sn75dp159_write(0x0A, 0x3D);	//APPLY_RXTX_CHANGES set to 1 and other default set
+
+    // qDebug() << "\t\t\tSN75DP159 update rate:" << rate << "flag_tdms_clock:" << flag_tdms_clock;
 }
