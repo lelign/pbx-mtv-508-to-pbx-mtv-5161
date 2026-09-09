@@ -1,1 +1,1 @@
-#define VERSION "SDK version.h  (" __TIME__ ", " __DATE__ ")"
+#define VERSION "SDK ver (" __TIME__ ", " __DATE__ ")"
