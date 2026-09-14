@@ -4,6 +4,7 @@
 #include <QSvgRenderer>
 #include <QLocale>
 #include <QPainterPath> // ign
+#include <QNetworkInterface>
 
 #define LAYOUT_PRESET_FILE_NAME      ("pbx-mtv-508_layout_preset")
 #define SETTINGS_SDI_INPUT_FILE_NAME ("pbx-mtv-508_sdi_input")
@@ -77,6 +78,39 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
 
     timer_analog_clock.start(50); // 10 (20) Гц — достаточно, чтобы секундная стрелка выглядела "скользящей"
     connect(&timer_analog_clock, &QTimer::timeout, this, &Layout::slot_draw_analog_clock_tick);
+
+    // подготовка сообщений
+    
+    PbxMtvSystem::darken_area_t dark_zone;
+    if (q_image_cache_file.size() != QSize(dark_zone.dark_right - dark_zone.dark_left, dark_zone.dark_bottom - dark_zone.dark_top)) {
+            q_image_cache_file = QImage(dark_zone.dark_right - dark_zone.dark_left, dark_zone.dark_bottom - dark_zone.dark_top, QImage::Format_ARGB32);
+             // Заполняем черным цветом — это будет базовая подложка, если виджеты не перекроют всю зону
+            q_image_cache_file.fill(Qt::black); 
+        }
+    
+    // Запуск однократного таймера на 1000 мс (чтобы система успела загрузиться)
+    // Добавляем mtvsystem (или переменную, в которой лежит указатель) в квадратные скобки
+    // 1. Через 1 секунду после старта включаем флаг сообщения
+    // 1. Сразу при вызове (на старте) красим в зеленый цвет
+    m_highlightColor = Qt::green; // Использовать Qt::green безопаснее, чем строку "green"
+    QTimer::singleShot(3000, this, [this, mtvsystem]() {
+        if (mtvsystem) {
+            mtvsystem->mess_exist = true;            
+        }
+        // собственно надпись нарисует draw_message_box_overlay привязан к analog_clock
+        //draw_message_box_overlay(m_highlightColor);
+        //m_highlightColor = Qt::green;
+        // 2. Запускаем второй таймер на 5 секунд
+        QTimer::singleShot(8000, this, [this, mtvsystem]() {
+            if (mtvsystem) {
+                mtvsystem->mess_exist = false;
+            }
+
+            // ТОЛЬКО ЗДЕСЬ (через 5 секунд) 
+            // Вызываем отрисовку — функция сама поймет, что флаг false, и скроет текст            
+            draw_message_box_overlay(m_highlightColor, trouble);
+        });
+    });
 
     ini_alarm_time_threshold();
     hdmi_color = 1;
@@ -577,7 +611,7 @@ int x, y;
     blit_to_frame(&image_label_panel, x, y);
     qDebug() << "update_label_name_channel";
     // flush_overlay();
-    mtvsystem->draw_overlay_fast(&image_label_panel, x, y);
+    mtvsystem->draw_overlay_fast(&image_label_panel, x, y, false);
 }
 
 void Layout::update_sdi_format(int index)
@@ -600,7 +634,7 @@ void Layout::update_sdi_format(int index)
     int y =layout_object[k].screen_plan.panel_format_video.y();
 
     blit_to_frame(&image_sdi_panel, x, y);
-    mtvsystem->draw_overlay_fast(&image_sdi_panel, x, y);
+    mtvsystem->draw_overlay_fast(&image_sdi_panel, x, y, false);
 }
 
 void Layout::flush_overlay()
@@ -1629,7 +1663,7 @@ void Layout::draw_time_counter(label_t label)
     blit_to_frame(&image_time_counter, label.size.x(), label.size.y());
     // Быстрый путь: сразу в активный HW-буфер, не дожидаясь раз-в-секунду flush_overlay().
     // Это и нужно, чтобы десятые доли секунды реально обновлялись на экране 10 раз/сек.
-    mtvsystem->draw_overlay_fast(&image_time_counter, label.size.x(), label.size.y());
+    mtvsystem->draw_overlay_fast(&image_time_counter, label.size.x(), label.size.y(), false);
 }
 
 void Layout::draw_digital_clock()
@@ -1656,7 +1690,7 @@ QString date_str;
     painter.drawText(clock_rec, Qt::AlignCenter, digital_clock_str);
     painter.end();
     blit_to_frame(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
-    mtvsystem->draw_overlay_fast(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y());
+    mtvsystem->draw_overlay_fast(&image_clock, digital_clock.clock_size.x(),  digital_clock.clock_size.y(), false);
 
     QRect date_rec = digital_clock.date_rec;
     date_rec.moveTo(0,0);
@@ -1679,7 +1713,7 @@ QString date_str;
 
     painter_date.drawText(date_rec, Qt::AlignCenter, date_str);
     blit_to_frame(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
-    mtvsystem->draw_overlay_fast(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y());
+    mtvsystem->draw_overlay_fast(&image_date, digital_clock.date_rec.x(),  digital_clock.date_rec.y(), false);
 
     mtvsystem->overlay_sync();
 }
@@ -1688,8 +1722,12 @@ void Layout::slot_draw_analog_clock_tick()
 {
     // Пока выбран стиль "аналоговые часы" - перерисовываем чаще 1 раза в секунду,
     // чтобы секундная стрелка двигалась плавно, а не "прыжками".
-    if(!clock_cell.style)
-        draw_analog_clock();
+    if(!clock_cell.style) draw_analog_clock();
+
+    if (mtvsystem->mess_exist) {       
+        // Вызываем рисование текста сообщения поверх всего
+        this->draw_message_box_overlay(m_highlightColor, trouble);
+    }   
 }
 
 void Layout::draw_analog_clock()
@@ -1774,7 +1812,7 @@ void Layout::draw_analog_clock()
     blit_to_frame(&image_clock, clock_rec.x(),  clock_rec.y());
     // Быстрый путь: сразу в активный HW-буфер (без flip) - FPGA подхватит
     // изменение стрелок в пределах ~16мс благодаря slot_fps_hardware_trigger().
-    mtvsystem->draw_overlay_fast(&image_clock, clock_rec.x(), clock_rec.y());
+    mtvsystem->draw_overlay_fast(&image_clock, clock_rec.x(), clock_rec.y(), false);
 }
 
 
@@ -1874,7 +1912,7 @@ void Layout::draw_TALLY_indicator_old_style(QRect cell, QColor color)
     get_image_TALLY_indicator_old_style(image_tally, tally_cell, color);
 
     blit_to_frame(&image_tally, cell.x(), cell.y());
-    mtvsystem->draw_overlay_fast(&image_tally, cell.x(), cell.y());
+    mtvsystem->draw_overlay_fast(&image_tally, cell.x(), cell.y(), false);
     mtvsystem->overlay_sync();
 }
 
@@ -1948,7 +1986,7 @@ QColor color;
     }
 
     blit_to_frame(&image_tally, tally_rec.x(), tally_rec.y());
-    mtvsystem->draw_overlay_fast(&image_tally, tally_rec.x(), tally_rec.y());
+    mtvsystem->draw_overlay_fast(&image_tally, tally_rec.x(), tally_rec.y(), false);
     mtvsystem->overlay_sync();
 }
 
@@ -2261,7 +2299,7 @@ void Layout::draw_alarm_label(int index, layout_object_t layout_object)
         painter_alarm.setPen(QPen(Qt::white));
         painter_alarm.drawText(alarm_rec, Qt::AlignCenter, alarm_label.at(i).text + elapsed_str);
         blit_to_frame(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
-        mtvsystem->draw_overlay_fast(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y());
+        mtvsystem->draw_overlay_fast(&image_alarm, alarm_label_rec.x(),  alarm_label_rec.y(), false);
         alarm_label_rec.translate(0, offset_h);
     }
 }
@@ -2362,7 +2400,7 @@ void Layout::clean_teletext_image(int channel)
     int y = panel.y();
 
     blit_to_frame(&image_teletext, x, y);
-    mtvsystem->draw_overlay_fast(&image_teletext, x, y);
+    mtvsystem->draw_overlay_fast(&image_teletext, x, y, false);
 }
 
 
@@ -2380,7 +2418,7 @@ void Layout::display_teletext(QImage image_teletext)
     int y = panel.y();
 
     blit_to_frame(&image, x, y);
-    mtvsystem->draw_overlay_fast(&image, x, y);
+    mtvsystem->draw_overlay_fast(&image, x, y, false);
     qDebug() << "display_teletext";
     // flush_overlay();
     // mtvsystem->overlay_sync();
@@ -2479,7 +2517,7 @@ void Layout::display_scte_104(int index)
     int y = panel.y();
 
     blit_to_frame(&image_scte_104, x, y);
-    mtvsystem->draw_overlay_fast(&image_scte_104, x, y);
+    mtvsystem->draw_overlay_fast(&image_scte_104, x, y, false);
 }
 
 
@@ -2519,7 +2557,7 @@ void Layout::display_op47_icons(int cell_index)
     int y =panel.y();
 
     blit_to_frame(&image_text_icons, x, y);
-    mtvsystem->draw_overlay_fast(&image_text_icons, x, y);
+    mtvsystem->draw_overlay_fast(&image_text_icons, x, y, false);
 }
 
 
@@ -2536,4 +2574,106 @@ void Layout::slot_splice(int index, QString text_in, QString text_out)
     display_scte_104(index);
     qDebug() << "slot_splice";
     // flush_overlay();
+}
+
+void Layout::draw_message_box_overlay(const QColor &color, QString trouble)
+{
+    if (q_image_cache_file.isNull()) return;
+
+    PbxMtvSystem::darken_area_t dark; 
+    
+    // Скрываем текст, если система говорит, что сообщения больше нет
+    if (mtvsystem && !mtvsystem->mess_exist) {
+        // Очищаем кэш изображения, делая его полностью прозрачным
+        q_image_cache_file.fill(Qt::transparent); 
+        
+        // Быстро отправляем пустую (очищенную) картинку на экран, чтобы текст исчез
+        
+        mtvsystem->draw_overlay_fast(&q_image_cache_file, dark.dark_left, dark.dark_top, true);
+        mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);
+        return; // Выходим из функции, ничего не рисуя поверх!
+    }
+
+    QString profitt_IP_MAC = get_network_setting();
+
+    if (!profitt_IP_MAC.isEmpty()) {
+        QPainter painter(&q_image_cache_file);
+        painter.setRenderHint(QPainter::Antialiasing);
+        painter.setRenderHint(QPainter::TextAntialiasing);
+
+        QFont font("Arial", 36, QFont::Bold);
+        painter.setFont(font);
+
+        // 1. Ограничиваем прямоугольник для отрисовки (весь размер кэш-картинки)
+        QRect rect = q_image_cache_file.rect();
+
+        // Флаги: выравнивание по центру + поддержка переносов \n + замена \t на пробелы
+        int flags = Qt::AlignLeft | Qt::TextWordWrap | Qt::TextExpandTabs;
+
+        // 2. РИСУЕМ ЧЕРНЫЙ КОНТУР ТЕКСТА
+        // Так как drawText не умеет делать QPen-обводку напрямую, классический быстрый трюк 
+        // для встраиваемых систем — отрисовать текст со смещением на 2 пикселя во все стороны
+        painter.setPen(Qt::black);
+        int offset = 2;
+        painter.drawText(rect.adjusted(-offset, -offset, -offset, -offset), flags, profitt_IP_MAC);
+        painter.drawText(rect.adjusted(offset, -offset, offset, -offset), flags, profitt_IP_MAC);
+        painter.drawText(rect.adjusted(-offset, offset, -offset, offset), flags, profitt_IP_MAC);
+        painter.drawText(rect.adjusted(offset, offset, offset, offset), flags, profitt_IP_MAC);
+        if (color != Qt::green){
+            painter.drawText(rect.adjusted(offset, offset, offset, offset), flags, trouble);
+        }
+
+        // 3. РИСУЕМ БЕЛОЕ ТЕЛО БУКВ ПОВЕРХ
+        painter.setPen(color);
+        painter.drawText(rect, flags, profitt_IP_MAC);
+
+        painter.end();
+    }
+
+    
+    mtvsystem->draw_overlay_fast(&q_image_cache_file, dark.dark_left, dark.dark_top, true);
+    
+    // создание урезанного холста croppedCanvas
+    // Вычисляем ширину и высоту на основе структуры
+    int crop_width = dark.dark_right - dark.dark_left;   // 1820 - 100 = 1720 пикселей
+    int crop_height = dark.dark_bottom - dark.dark_top;  // 640 - 440 = 200 пикселей
+    QImage croppedCanvas = full_overlay_frame.copy(dark.dark_left, dark.dark_top, crop_width, crop_height);
+    mtvsystem->draw_overlay_fast(&croppedCanvas, dark.dark_left, dark.dark_top, false);
+}
+
+QString Layout::get_network_setting() 
+{
+    QString IP_mac; 
+
+    // Перебираем интерфейсы через Qt
+    foreach(QNetworkInterface netInterface, QNetworkInterface::allInterfaces())
+    {
+        // Ищем именно eth0 и пропускаем петлевой интерфейс
+        if(!(netInterface.flags() & QNetworkInterface::IsLoopBack) && netInterface.name() == "eth0")
+        {                
+            network_0.mac = netInterface.hardwareAddress();
+            
+            // Получаем записи адресов, которые включают и IP, и Маску, и Бродкаст
+            QList<QNetworkAddressEntry> entries = netInterface.addressEntries();
+            for (const QNetworkAddressEntry &entry : entries) 
+            {
+                // Нам нужен только IPv4
+                if(entry.ip().protocol() == QAbstractSocket::IPv4Protocol)
+                {
+                    // Сохраняем в вашу структуру network_0 данные через Qt
+                    network_0.ip   = entry.ip().toString();
+                    network_0.mask = entry.netmask().toString();
+                    network_0.gw   = ""; // Шлюз (Gateway) Qt напрямую не получает, если он критичен — см. Вариант 2
+
+                    // qDebug(category) << "\tconnected IP:" << network_0.ip << "MAC:" << network_0.mac;
+                    
+                    // Формируем результирующую строку
+                    IP_mac = QString("\tProfitt PBX-MTV-5161 \n\tIP: %1 \n\tMAC: %2").arg(network_0.ip).arg(network_0.mac);
+                    return IP_mac;
+                }
+            }
+        }
+    }
+    
+    return QString(); 
 }

@@ -1168,7 +1168,7 @@ const int16_t uint8_crcb_b_data[] = {
 // }
 
 
-void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer) {
+void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer, bool darken, int screen_x_start, int screen_y, QImage * cacheImg) {
     if (y < 0 || y >= img->height()) {
         qCritical() << "CRITICAL ERROR: Requested y line" << y << "is out of QImage bounds";
         return;
@@ -1209,6 +1209,24 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
     // Округляем основную сетку обработки вниз до ближайшего кратного 8
     int x = 0;
     int vector_width = width & ~7; 
+
+    darken_area_t dark_zone;
+    // Проверяем попадание строки в зону плашки по Y
+    bool is_y_inside_dark_zone = (screen_y >= dark_zone.dark_top && screen_y < dark_zone.dark_bottom);
+
+    // Получаем строку для записи в кэш-картинку Layout, если мы в режиме отрисовки виджетов
+    uint8_t * cache_line = nullptr;
+    if (!darken && mess_exist && is_y_inside_dark_zone && cacheImg && !cacheImg->isNull()) {
+        int cache_y = screen_y - dark_zone.dark_top;
+        cache_line = cacheImg->scanLine(cache_y); // Открываем строку кэша на запись
+    }
+
+    const uint16_t x_offsets[] = {0, 1, 2, 3, 4, 5, 6, 7};
+    uint16x8_t v_x_offsets = vld1q_u16(x_offsets);
+    uint16x8_t v_dark_left = vmovq_n_u16(dark_zone.dark_left);
+    uint16x8_t v_dark_right = vmovq_n_u16(dark_zone.dark_right);
+
+    int dark_zone_width = dark_zone.dark_right - dark_zone.dark_left;
 
     // Основной цикл: обрабатываем по 8 пикселей за раз
     for(; x < vector_width; x += 8) {
@@ -1255,63 +1273,142 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
         uint8x8x3_t out_p1;
         out_p1.val[0] = vzip_u8(cb_down, cr_down).val[0]; // Cb0, Cr0, Cb1, Cr1...
         out_p1.val[1] = y_val;                            // Y0,  Y1,  Y2,  Y3...
-        out_p1.val[2] = a_val;                            // A0,  A1,  A2,  A3...
+        // Управление прозрачностью: Если флаг darken равен true, 
+        // альфа-канал принудительно забивается непрозрачным цветом vmov_n_u8(255)
+        out_p1.val[2] = darken ? vmov_n_u8(255) : a_val;                            // A0,  A1,  A2,  A3...
 
-        vst3_u8(dst, out_p1);
+        if (darken || !mess_exist || !is_y_inside_dark_zone) vst3_u8(dst, out_p1);
         dst += 24;
+
+        // НАКОПЛЕНИЕ КЭША
+        // Если строка пересекается с затемненной плашкой и передан cacheImg, код на лету формирует кэш-картинку:
+        if (cache_line) {
+                // Векторная маска (m_inside): С помощью vcgeq_u16 (больше или равно) и vcltq_u16 (меньше) 
+                // вычисляются глобальные координаты X для каждого из 8 пикселей. 
+                // Проверяется, какие из них попадают внутрь dark_left и dark_right
+                uint16x8_t v_abs_x = vaddq_u16(vmovq_n_u16(screen_x_start + x), v_x_offsets);
+                uint16x8_t m_left = vcgeq_u16(v_abs_x, v_dark_left);
+                uint16x8_t m_right = vcltq_u16(v_abs_x, v_dark_right);
+                uint16x8_t m_inside = vandq_u16(m_left, m_right);
+                uint8x8_t m_inside_u8 = vmovn_u16(m_inside);
+
+                // Затемнение пикселей: Операция vshrn_n_u16(r_u, 1) сдвигает биты вправо на 1. 
+                // В бинарной математике это быстрое деление на 2. 
+                // То есть цвета RGB исходного изображения становятся в два раза темнее.
+                uint8x8_t r_half = vshrn_n_u16(r_u, 1);
+                uint8x8_t g_half = vshrn_n_u16(g_u, 1);
+                uint8x8_t b_half = vshrn_n_u16(b_u, 1);
+
+                int cache_x = (screen_x_start + x) - dark_zone.dark_left;
+                if (cache_x >= 0 && (cache_x + 8) <= dark_zone_width) {
+                        uint8x8x4_t current_cache = vld4_u8(cache_line + cache_x * 4);
+                        uint8x8x4_t out_cache;
+                        // Битовый выбор (vbsl_u8): Инструкция Vector Bitwise Select на основе ранее созданной маски 
+                        // решает:
+                        // Если пиксель внутри зоны — записать в кэш деленный пополам (затемненный) цвет.
+                        // Если пиксель вне зоны — сохранить старый пиксель из кэша (current_cache).
+                        out_cache.val[2] = vbsl_u8(m_inside_u8, r_half, current_cache.val[2]); 
+                        out_cache.val[1] = vbsl_u8(m_inside_u8, g_half, current_cache.val[1]); 
+                        out_cache.val[0] = vbsl_u8(m_inside_u8, b_half, current_cache.val[0]); 
+                        out_cache.val[3] = vmov_n_u8(255); 
+
+                        // Измененные пиксели сохраняются обратно в структуру cacheImg.
+                        vst4_u8(cache_line + cache_x * 4, out_cache);
+                }
+        }
     }
 
     // Хвостовой цикл: обрабатываем оставшиеся пиксели (от 0 до 7 штук) скалярно
     // Это полностью решает проблему с нечетной шириной (например, 131)
+        // Хвостовой цикл: обрабатываем оставшиеся пиксели (от 0 до 7 штук) скалярно
     for(; x < width; x += 2) {
-        // Если остался всего 1 пиксель на краю (например, 131-й)
+        // --- Случай "висящего" последнего нечётного пикселя ---
         if (x == width - 1) {
             const uint8_t * p = line + x * 4;
             uint8_t b = p[0];
             uint8_t g = p[1];
             uint8_t r = p[2];
-            uint8_t a = p[3];
+            uint8_t a = darken ? 255 : p[3];
 
             int y_val  = (77 * r + 150 * g + 29 * b) >> 8;
             int cb_val = (((-43 * r - 85 * g + 128 * b) >> 8) + 128);
             int cr_val = (((128 * r - 107 * g - 21 * b) >> 8) + 128);
 
-            // Для последнего нечетного пикселя дублируем его хроматическую часть как пару для FPGA
-            *dst++ = (uint8_t)cb_val;
-            *dst++ = (uint8_t)y_val;
-            *dst++ = a;
-            *dst++ = (uint8_t)cr_val;
-            *dst++ = (uint8_t)y_val;
-            *dst++ = a;
+            if (darken || !mess_exist || !is_y_inside_dark_zone) {
+                *dst++ = (uint8_t)cb_val;
+                *dst++ = (uint8_t)y_val;
+                *dst++ = a;
+                *dst++ = (uint8_t)cr_val;
+                *dst++ = (uint8_t)y_val;
+                *dst++ = a;
+            } else {
+                dst += 6; // пропускаем запись, но сдвигаем dst как в векторном цикле
+            }
+
+            // Кэш для одиночного хвостового пикселя
+            if (cache_line) {
+                int abs_x = screen_x_start + x;
+                if (abs_x >= dark_zone.dark_left && abs_x < dark_zone.dark_right) {
+                    int cache_x = abs_x - dark_zone.dark_left;
+                    if (cache_x >= 0 && cache_x < dark_zone_width) {
+                        uint8_t * cp = cache_line + cache_x * 4;
+                        cp[2] = r >> 1;
+                        cp[1] = g >> 1;
+                        cp[0] = b >> 1;
+                        cp[3] = 255;
+                    }
+                }
+            }
             break;
         }
 
-        // Если осталось четное количество пикселей в хвосте (до 6 пикселей)
+        // --- Обычная пара пикселей ---
         const uint8_t * p0 = line + x * 4;
         const uint8_t * p1 = line + (x + 1) * 4;
 
-        // Пиксель 0
         int y0  = (77 * p0[2] + 150 * p0[1] + 29 * p0[0]) >> 8;
         int cb0 = ((-43 * p0[2] - 85 * p0[1] + 128 * p0[0]) >> 8) + 128;
         int cr0 = ((128 * p0[2] - 107 * p0[1] - 21 * p0[0]) >> 8) + 128;
 
-        // Пиксель 1
         int y1  = (77 * p1[2] + 150 * p1[1] + 29 * p1[0]) >> 8;
         int cb1 = ((-43 * p1[2] - 85 * p1[1] + 128 * p1[0]) >> 8) + 128;
         int cr1 = ((128 * p1[2] - 107 * p1[1] - 21 * p1[0]) >> 8) + 128;
 
-        // Усреднение хромы для пары 4:2:2
         uint8_t cb_avg = (uint8_t)((cb0 + cb1 + 1) >> 1);
         uint8_t cr_avg = (uint8_t)((cr0 + cr1 + 1) >> 1);
 
-        // Запись в формате Cb0 Y0 A0 Cr0 Y1 A1
-        *dst++ = cb_avg;
-        *dst++ = (uint8_t)y0;
-        *dst++ = p0[3]; // Альфа 0
-        
-        *dst++ = cr_avg;
-        *dst++ = (uint8_t)y1;
-        *dst++ = p1[3]; // Альфа 1
+        uint8_t a0 = darken ? 255 : p0[3];
+        uint8_t a1 = darken ? 255 : p1[3];
+
+        if (darken || !mess_exist || !is_y_inside_dark_zone) {
+            *dst++ = cb_avg;
+            *dst++ = (uint8_t)y0;
+            *dst++ = a0;
+
+            *dst++ = cr_avg;
+            *dst++ = (uint8_t)y1;
+            *dst++ = a1;
+        } else {
+            dst += 6;
+        }
+
+        // Кэш для пары пикселей
+        if (cache_line) {
+            for (int k = 0; k < 2; ++k) {
+                const uint8_t * p = (k == 0) ? p0 : p1;
+                int abs_x = screen_x_start + x + k;
+                if (abs_x >= dark_zone.dark_left && abs_x < dark_zone.dark_right) {
+                    int cache_x = abs_x - dark_zone.dark_left;
+                    if (cache_x >= 0 && cache_x < dark_zone_width) {
+                        uint8_t * cp = cache_line + cache_x * 4;
+                        cp[2] = p[2] >> 1; // r_half
+                        cp[1] = p[1] >> 1; // g_half
+                        cp[0] = p[0] >> 1; // b_half
+                        cp[3] = 255;
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -1518,7 +1615,8 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
         int row_stride = 1920 * 3; 
 
         int img_w = image->width();  
-        int img_h = image->height(); 
+        int img_h = image->height();
+        int aligned_offset_x = (offset_x / 2) * 2;
 
         if ((offset_x + img_w) > 1920 || (offset_y + img_h) > 1080) {
                 qCritical() << "CRITICAL ERROR: Image with offsets goes out of Full HD bounds!";
@@ -1533,10 +1631,9 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
     // 2. Render loop using ARM-NEON convert_line
     for (int y = 0; y < image->height(); ++y) {
         int screen_y = y + offset_y;
-        uint8_t * row_start_address = start_address + (screen_y * row_stride);
-        uint8_t * current_row_with_offset = row_start_address + (offset_x * 3);
+        uint8_t * current_row_with_offset = start_address + (screen_y * row_stride) + (aligned_offset_x * 3);
         
-        convert_line(image, y, image->width(), current_row_with_offset);
+        convert_line(image, y, image->width(), current_row_with_offset, false, aligned_offset_x, screen_y, m_msgImageCache);
     }
 
     // Переключаем активный индекс и делаем физический ioctl flip
@@ -1547,7 +1644,7 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
         qCritical() << "Failed to execute IOCTL FLIP! Error code:" << errno;
         return;
     }
-    qDebug(category) << "current_idx" << this->current_buffer_index;
+//     qDebug(category) << "current_idx" << this->current_buffer_index;
 }
 
 // Быстрый путь для мелких, часто меняющихся элементов (секундная стрелка,
@@ -1567,7 +1664,7 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
 // элемента (клок раз в 100мс) это не должно быть заметно, а на следующем
 // кадре всё уже консистентно. Если это станет проблемой - придётся уходить
 // на shadow-copy back-buffer (см. обсуждение).
-void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y)
+void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y, bool darken)
 {
     QElapsedTimer timer;
     timer.start();  
@@ -1582,6 +1679,13 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y)
     }
     if (image->format() != QImage::Format_ARGB32 && image->format() != QImage::Format_RGB32) {
         qCritical() << "WARNING: QImage format is not ARGB32/RGB32! Current format:" << image->format();
+    }
+
+    // Сохраняем или сбрасываем кэш ОДИН РАЗ до цикла строк, чтобы сберечь такты CPU
+    if (darken) {
+        m_msgImageCache = image; 
+    } else if (!this->mess_exist) {
+        m_msgImageCache = nullptr; 
     }
 
     // Выравниваем offset_x вниз до чётного - сетка макропикселей Cb/Y/A/Cr/Y/A
@@ -1606,10 +1710,9 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y)
 
     for (int y = 0; y < img_h; ++y) {
         int screen_y = y + offset_y;
-        uint8_t * row_start_address = start_address + (screen_y * row_stride);
-        uint8_t * current_row_with_offset = row_start_address + (aligned_offset_x * 3);
+        uint8_t * current_row_with_offset = start_address + (screen_y * row_stride) + (aligned_offset_x * 3);
 
-        convert_line(image, y, img_w, current_row_with_offset);
+        convert_line(image, y, img_w, current_row_with_offset, darken, aligned_offset_x, screen_y, m_msgImageCache);
     }
 
 //     qDebug(category) << "mtvsystem->draw_overlay_fast();" << timer.elapsed() << "milliseconds" << "current_idx" << this->current_buffer_index;

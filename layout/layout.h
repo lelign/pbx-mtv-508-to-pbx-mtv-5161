@@ -249,6 +249,8 @@ public:
     Cascade_server  *cascade_server;
     Time_counter    *timer_time_counter;
 
+    QImage q_image_cache_file; // Буфер накопления фона подложки
+
 private:
     QImage *image_clock;
     QTimer timer_update_alarm;
@@ -331,6 +333,19 @@ private:
     QImage full_overlay_frame;   // общий кадр 1920x1080, накапливает все элементы
     void blit_to_frame(QImage *image, int x, int y);
     void flush_overlay();
+
+    QColor m_highlightColor;
+    QString trouble;
+    void draw_message_box_overlay(const QColor &color, QString trouble);
+
+    struct net_setting_t{
+        QString ip;
+        QString mask;
+        QString gw;
+        QString mac;
+    };
+    net_setting_t network_0;
+    QString get_network_setting(); // перенесен из mtv-web
 
 signals:
     void signal_solo(solo_mode_t solo_mode);
