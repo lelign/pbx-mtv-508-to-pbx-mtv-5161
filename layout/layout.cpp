@@ -92,25 +92,25 @@ Layout::Layout(PbxMtvSystem *mtvsystem,  Gpio *gpio, Eventlog *eventlog) :
     // Добавляем mtvsystem (или переменную, в которой лежит указатель) в квадратные скобки
     // 1. Через 1 секунду после старта включаем флаг сообщения
     // 1. Сразу при вызове (на старте) красим в зеленый цвет
-    m_highlightColor = Qt::green; // Использовать Qt::green безопаснее, чем строку "green"
-    QTimer::singleShot(3000, this, [this, mtvsystem]() {
-        if (mtvsystem) {
-            mtvsystem->mess_exist = true;            
-        }
-        // собственно надпись нарисует draw_message_box_overlay привязан к analog_clock
-        //draw_message_box_overlay(m_highlightColor);
-        //m_highlightColor = Qt::green;
-        // 2. Запускаем второй таймер на 5 секунд
-        QTimer::singleShot(8000, this, [this, mtvsystem]() {
-            if (mtvsystem) {
-                mtvsystem->mess_exist = false;
-            }
+    // m_highlightColor = Qt::green; // Использовать Qt::green безопаснее, чем строку "green"
+    // QTimer::singleShot(3000, this, [this, mtvsystem]() {
+    //     if (mtvsystem) {
+    //         mtvsystem->mess_exist = true;            
+    //     }
+    //     // собственно надпись нарисует draw_message_box_overlay привязан к analog_clock
+    //     //draw_message_box_overlay(m_highlightColor);
+    //     //m_highlightColor = Qt::green;
+    //     // 2. Запускаем второй таймер на 5 секунд
+    //     QTimer::singleShot(8000, this, [this, mtvsystem]() {
+    //         if (mtvsystem) {
+    //             mtvsystem->mess_exist = false;
+    //         }
 
-            // ТОЛЬКО ЗДЕСЬ (через 5 секунд) 
-            // Вызываем отрисовку — функция сама поймет, что флаг false, и скроет текст            
-            draw_message_box_overlay(m_highlightColor, trouble);
-        });
-    });
+    //         // ТОЛЬКО ЗДЕСЬ (через 5 секунд) 
+    //         // Вызываем отрисовку — функция сама поймет, что флаг false, и скроет текст            
+    //         draw_message_box_overlay(m_highlightColor, trouble);
+    //     });
+    // });
 
     ini_alarm_time_threshold();
     hdmi_color = 1;
@@ -707,6 +707,26 @@ static int output_format_old = -1;
     // full_overlay_frame -> draw_overlay() пишет её в НЕАКТИВНЫЙ буфер -> flip.
     // Так зритель не видит, как раскладка перестраивается "по кускам" вживую.
     flush_overlay();
+
+    this->m_highlightColor = Qt::green; // Использовать Qt::green безопаснее, чем строку "green"
+    QTimer::singleShot(500, this, [this]() {
+        if (mtvsystem) {
+            mtvsystem->mess_exist = true;            
+        }
+        // собственно надпись нарисует draw_message_box_overlay привязан к analog_clock
+        //this->draw_message_box_overlay(this->m_highlightColor);
+        //this->m_highlightColor = Qt::green;
+        // 2. Запускаем второй таймер на 5 секунд
+        QTimer::singleShot(4000, this, [this]() {
+            if (mtvsystem) {
+                mtvsystem->mess_exist = false;
+            }
+
+            // ТОЛЬКО ЗДЕСЬ (через 5 секунд) 
+            // Вызываем отрисовку — функция сама поймет, что флаг false, и скроет текст            
+            this->draw_message_box_overlay(this->m_highlightColor, this->trouble);
+        });
+    });
 }
 
 void Layout::draw_overlay_test_file()
@@ -2580,20 +2600,29 @@ void Layout::draw_message_box_overlay(const QColor &color, QString trouble)
 {
     if (q_image_cache_file.isNull()) return;
 
-    PbxMtvSystem::darken_area_t dark; 
-    
-    // Скрываем текст, если система говорит, что сообщения больше нет
+    PbxMtvSystem::darken_area_t dark{};
+
     if (mtvsystem && !mtvsystem->mess_exist) {
-        // Очищаем кэш изображения, делая его полностью прозрачным
-        q_image_cache_file.fill(Qt::transparent); 
-        
-        // Быстро отправляем пустую (очищенную) картинку на экран, чтобы текст исчез
-        
-        mtvsystem->draw_overlay_fast(&q_image_cache_file, dark.dark_left, dark.dark_top, true);
-        mtvsystem->draw_overlay(&full_overlay_frame, 0, 0);
-        return; // Выходим из функции, ничего не рисуя поверх!
+        q_image_cache_file.fill(Qt::transparent);
+        mtvsystem->draw_overlay_fast(&full_overlay_frame, 0, 0, false);
+        return;
     }
 
+    // --- ШАГ A: берём свежий фон и затемняем его НАПРЯМУЮ через QPainter ---
+    // Не зависит от m_msgImageCache/convert_line — работает корректно с первого
+    // же тика после показа, независимо от того, что было на прошлом цикле.
+    int crop_width  = dark.dark_right  - dark.dark_left;
+    int crop_height = dark.dark_bottom - dark.dark_top;
+    QImage croppedCanvas = full_overlay_frame.copy(dark.dark_left, dark.dark_top, crop_width, crop_height);
+
+    q_image_cache_file = croppedCanvas.convertToFormat(QImage::Format_ARGB32);
+    {
+        QPainter darken_painter(&q_image_cache_file);
+        darken_painter.fillRect(q_image_cache_file.rect(), QColor(0, 0, 0, 128)); // 50% чёрным
+        darken_painter.end();
+    }
+
+    // --- ШАГ B: текст поверх уже затемнённого фона ---
     QString profitt_IP_MAC = get_network_setting();
 
     if (!profitt_IP_MAC.isEmpty()) {
@@ -2604,41 +2633,27 @@ void Layout::draw_message_box_overlay(const QColor &color, QString trouble)
         QFont font("Arial", 36, QFont::Bold);
         painter.setFont(font);
 
-        // 1. Ограничиваем прямоугольник для отрисовки (весь размер кэш-картинки)
         QRect rect = q_image_cache_file.rect();
-
-        // Флаги: выравнивание по центру + поддержка переносов \n + замена \t на пробелы
         int flags = Qt::AlignLeft | Qt::TextWordWrap | Qt::TextExpandTabs;
 
-        // 2. РИСУЕМ ЧЕРНЫЙ КОНТУР ТЕКСТА
-        // Так как drawText не умеет делать QPen-обводку напрямую, классический быстрый трюк 
-        // для встраиваемых систем — отрисовать текст со смещением на 2 пикселя во все стороны
         painter.setPen(Qt::black);
         int offset = 2;
         painter.drawText(rect.adjusted(-offset, -offset, -offset, -offset), flags, profitt_IP_MAC);
         painter.drawText(rect.adjusted(offset, -offset, offset, -offset), flags, profitt_IP_MAC);
         painter.drawText(rect.adjusted(-offset, offset, -offset, offset), flags, profitt_IP_MAC);
         painter.drawText(rect.adjusted(offset, offset, offset, offset), flags, profitt_IP_MAC);
-        if (color != Qt::green){
+        if (color != Qt::green) {
             painter.drawText(rect.adjusted(offset, offset, offset, offset), flags, trouble);
         }
 
-        // 3. РИСУЕМ БЕЛОЕ ТЕЛО БУКВ ПОВЕРХ
         painter.setPen(color);
         painter.drawText(rect, flags, profitt_IP_MAC);
 
         painter.end();
     }
 
-    
+    // --- ШАГ C: отправляем готовый композит на экран ---
     mtvsystem->draw_overlay_fast(&q_image_cache_file, dark.dark_left, dark.dark_top, true);
-    
-    // создание урезанного холста croppedCanvas
-    // Вычисляем ширину и высоту на основе структуры
-    int crop_width = dark.dark_right - dark.dark_left;   // 1820 - 100 = 1720 пикселей
-    int crop_height = dark.dark_bottom - dark.dark_top;  // 640 - 440 = 200 пикселей
-    QImage croppedCanvas = full_overlay_frame.copy(dark.dark_left, dark.dark_top, crop_width, crop_height);
-    mtvsystem->draw_overlay_fast(&croppedCanvas, dark.dark_left, dark.dark_top, false);
 }
 
 QString Layout::get_network_setting() 
