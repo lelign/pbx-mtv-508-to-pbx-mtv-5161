@@ -127,7 +127,7 @@ void Hdmi_gs12170::slot_update_gs12170(){
 
     if ((lock != lock_prev) || (rate != rate_prev)){
         if (lock){
-            // gs12170_update_scdc();
+            gs12170_update_scdc();
             emit gs12170_lock_rate_changed(rate);
         }
         rate_prev = rate;
