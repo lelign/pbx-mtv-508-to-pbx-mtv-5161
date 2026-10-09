@@ -12,6 +12,8 @@
 #include <fstream> // for js
 #include <QCoreApplication>
 
+#include <cmath> // Для std::abs
+
 //static QLoggingCategory category("SYSTEM");
 static QLoggingCategory category("\033[34m MTV-SYSTEM\033[0m"); // ign blue
 
@@ -23,7 +25,10 @@ const char * fname = "/dev/str-mem";
 const int video_size = 12443648;
 #define OVERLAY_IOCTL_FLIP 0x40046D0E
 #define MOTION_THR (100)
-#define ANCIN ("/dev/tty10")
+
+#define ANCIN ("/dev/tsin1") // <= in 508
+// #define ANCIN ("/dev/tty10") // in 5161
+// #define ANCIN ("/home/root/scte_104") // for probe
 
 /*//enum 5161
 enum {
@@ -1591,7 +1596,12 @@ void PbxMtvSystem::convert_line(QImage * img, int y, int width, uint8_t * buffer
 void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
 {
         // ... (Your standard null-pointer checks and boundary checks remain here) ...
+        QElapsedTimer timer;
+        timer.start();
+        draw_overlay_run = true;
+        QMutexLocker locker(&m_mutex_draw); 
         // 1. ЗАЩИТА ОТ NULL-УКАЗАТЕЛЕЙ
+       
         if (!image) {
                 qCritical() << "CRITICAL ERROR: QImage pointer is NULL!";
                 return;
@@ -1633,7 +1643,7 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
         int screen_y = y + offset_y;
         uint8_t * current_row_with_offset = start_address + (screen_y * row_stride) + (aligned_offset_x * 3);
         
-        convert_line(image, y, image->width(), current_row_with_offset, false, aligned_offset_x, screen_y, m_msgImageCache);
+        convert_line(image, y, image->width(), current_row_with_offset, false, aligned_offset_x, screen_y, m_msgImageCache);        
     }
 
     // Переключаем активный индекс и делаем физический ioctl flip
@@ -1644,6 +1654,32 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
         qCritical() << "Failed to execute IOCTL FLIP! Error code:" << errno;
         return;
     }
+
+    int64_t current_elapsed = timer.elapsed();
+
+        if (current_elapsed != 0) {
+        int64_t current_delta = current_elapsed - last_elapsed_time;
+        static int64_t last_delta = 0; 
+        
+        // Вводим порог чувствительности (например, 5 мс). 
+        // Всё, что прыгает меньше этого значения, лог будет игнорировать.
+        int64_t delta_change = std::abs(current_delta - last_delta);
+        
+        // Логируем только если разница между дельтами СУЩЕСТВЕННА (например, > 5 мс)
+        // ИЛИ если само время выполнения стало аномально большим (например, > 15 мс)
+        if ((delta_change > 15 && last_elapsed_time != 0) || current_elapsed > 15) {
+                
+                qCDebug(category) << ANSI_MAGENTA << "draw_overlay" << ANSI_RESET 
+                                << "Elapsed:" << current_elapsed << "ms,"
+                                << "Delta:" << current_delta << "ms";       
+                
+                last_delta = current_delta;
+        }
+        
+        last_elapsed_time = current_elapsed;
+
+        }
+    draw_overlay_run = false;
 //     qDebug(category) << "current_idx" << this->current_buffer_index;
 }
 
@@ -1666,6 +1702,8 @@ void PbxMtvSystem::draw_overlay(QImage *image, int offset_x, int offset_y)
 // на shadow-copy back-buffer (см. обсуждение).
 void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y, bool darken)
 {
+        if(draw_overlay_run) return;
+    QMutexLocker locker(&m_mutex_draw_fast); 
     QElapsedTimer timer;
     timer.start();  
 
@@ -1710,17 +1748,40 @@ void PbxMtvSystem::draw_overlay_fast(QImage *image, int offset_x, int offset_y, 
 
     for (int y = 0; y < img_h; ++y) {
         int screen_y = y + offset_y;
+        // aligned_offset_x = 0;
         uint8_t * current_row_with_offset = start_address + (screen_y * row_stride) + (aligned_offset_x * 3);
 
         convert_line(image, y, img_w, current_row_with_offset, darken, aligned_offset_x, screen_y, m_msgImageCache);
+       
     }
+    
+    
 
 //     qDebug(category) << "mtvsystem->draw_overlay_fast();" << timer.elapsed() << "milliseconds" << "current_idx" << this->current_buffer_index;
     int64_t current_elapsed = timer.elapsed();
-    if (current_elapsed != last_elapsed_time && current_elapsed != 0) {
-        qCDebug(category) << ANSI_MAGENTA << "draw_overlay_fast();" << ANSI_RESET << current_elapsed << "ms";
+
+        if (current_elapsed != 0) {
+        int64_t current_delta = current_elapsed - last_elapsed_time;
+        static int64_t last_delta = 0; 
+        
+        // Вводим порог чувствительности (например, 5 мс). 
+        // Всё, что прыгает меньше этого значения, лог будет игнорировать.
+        int64_t delta_change = std::abs(current_delta - last_delta);
+        
+        // Логируем только если разница между дельтами СУЩЕСТВЕННА (например, > 5 мс)
+        // ИЛИ если само время выполнения стало аномально большим (например, > 15 мс)
+        if ((delta_change > 15 && last_elapsed_time != 0) || current_elapsed > 15) {
+                
+                qCDebug(category) << ANSI_MAGENTA << "draw_overlay_fast()" << ANSI_RESET 
+                                << "Elapsed:" << current_elapsed << "ms,"
+                                << "Delta:" << current_delta << "ms";       
+                
+                last_delta = current_delta;
+        }
+        
         last_elapsed_time = current_elapsed;
-    }
+
+        }
 
     // ioctl FLIP осознанно не делаем - buffer index не меняем.
 }
@@ -2103,7 +2164,7 @@ QList<int> PbxMtvSystem::get_audio_level()
 {
         QList<int> ret;
 
-        for(int q=0; q<32; q++){
+        for(int q=0; q<64; q++){ // ign 8*4=32 chnge to 16*4=64
                 int i = q;
                 uint32_t value = reg_read(REG_BARS, i);
                 if(get_sdi_status(q/4))

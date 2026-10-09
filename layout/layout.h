@@ -25,6 +25,14 @@
 #include "../cascade_ctrl/cascade_ctrl.h"
 #include "../time_counter/time_counter.h"
 
+#include "hardware_diagnostics/hardware_diagnostics.h"
+
+
+#include <QThread> // for audio_emulator
+#include "../audio_emulator/emulator.h" // for audio_emulator
+#include <cstdint> // for audio_emulator uint8_t 
+
+
 #define CASCADE_NUM 4 // кол-во блоков в каскаде
 
 class Layout : public QObject
@@ -251,12 +259,15 @@ public:
 
     QImage q_image_cache_file; // Буфер накопления фона подложки
 
+    // int public_audio_levels[64] = {0}; // generate by audio_emulator
+    uint8_t public_audio_levels[64] = {0}; // generate by audio_emulator Массив из 64 байт for FPGA
+
 private:
     QImage *image_clock;
     QTimer timer_update_alarm;
     QTimer timer_update_op47;
     QTimer timer_analog_clock;      // для плавного хода секундной стрелки (чаще 1 раза в секунду)
-
+    
     QSvgRenderer m_clock_face;
     QImage       m_clock_face_cache;   // циферблат не меняется - рендерим SVG один раз, дальше просто копируем
 
@@ -269,7 +280,7 @@ private:
     QImage  image_sound;
     QImage  image_teletext;
     QImage get_layout_1x1(int index);
-    QImage get_layout();
+    QImage get_layout(bool restore); // added boolean restore for diff mode
     void get_grid_size();
     void set_cell_plane_old_style(layout_object_t &cell_object);
     void disable_all_audio_meters();
@@ -345,7 +356,42 @@ private:
         QString mac;
     };
     net_setting_t network_0;
+    QString profitt_IP_MAC;
     QString get_network_setting(); // перенесен из mtv-web
+    QString parseEventlogWarning();
+
+    Hardware_diagnostics *hardware_diagnostics_layout;
+
+    // for audio_meters
+    struct VideoExistStruct {
+                            bool channels[16] = {false}; // По умолчанию видео нигде нет
+                            } video_exist;
+
+    void parseVideoExistFile(const QString &filePath); // file video_exist on board do: seq -s . 1 3 > video_exist (1.2.3) // or seq -s . 16 > video_exist (1.2....16)
+
+    QThread* m_emulatorThread; // audio_emulator generate int public_audio_levels[64]
+    AudioEmulatorWorker* m_emulatorWorker; 
+
+    void draw_audio_meters();
+    // Локальная функция рисования отдельного светодиодного бара на QImage
+    void drawSingleBar(QPainter &painter, int level, int peakLevel, int x_offset, int y_offset, int width, int height);
+    // int public_audio_levels[64] = {0};       // Сюда пишем данные из эмулятора (цель)
+    double smoothed_audio_levels[64] = {0.0}; // Отсюда берем данные для рисования (сглаженные)
+    // MАССИВЫ ДЛЯ ПИКА:
+    double peak_audio_levels[64] = {0.0};    // Высота пиковой полоски
+    int peak_hold_ticks[64] = {0};           // Время удержания пика (в кадрах)
+    
+    void printLevelsToHex(); // not used for debug with FPGA
+   
+    // заполнение darken_background для восстановления после снятия Warning
+    void save_darken_background(QImage *img, int x_offset, int y_offset);
+    QImage m_savedBackground;
+    void mergeClockWithSavedBackground(int offset_x, int offset_y); // сложение циферблата ан.часов с m_savedBackground
+
+    // удаление лишнего шлюза 192.168.0.1 если сработал DHCP
+    void cleanRoutingTable();
+
+    int warning_delay = 5000; // как часто можно выводить Warning, доолно быть минимум 60000 (1 минута)
 
 signals:
     void signal_solo(solo_mode_t solo_mode);
@@ -355,6 +401,11 @@ signals:
     void signal_cascade_device_data_receive(int index, QByteArray data);
     void signal_cascade_server_readyRead(QByteArray arr);
 
+private slots:
+    void slot_fan_state(int fan_state);
+    void slot_over_temperature(QString str);
+    void onLevelsUpdated(const QVector<int> &levels); // audio_emulator
+    
 public slots:
     void slot_new_format();
     void slot_qpps();

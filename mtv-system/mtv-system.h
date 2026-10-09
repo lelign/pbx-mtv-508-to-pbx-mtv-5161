@@ -10,9 +10,12 @@
 #include <QElapsedTimer>
 #include <nlohmann/json.hpp> // jq
 
+#include <QMutex> // close the door
+
 #define ANSI_MAGENTA  "\033[35m" //colorised output
 #define ANSI_RED  "\033[31m" //colorised output
 #define ANSI_RESET  "\033[0m"
+#define ANSI_YELLOW  "\033[33m"
 
 typedef struct {
         int id;
@@ -60,8 +63,8 @@ public:
         struct darken_area_t {
                 int dark_top = 440;
                 int dark_bottom = 640;
-                int dark_left = 100;
-                int dark_right = 1820;
+                int dark_left = 4;
+                int dark_right = 1916;
         };
 
         PbxMtvSystem();
@@ -106,6 +109,10 @@ private:
         int current_buffer_index;
         int64_t last_elapsed_time = -1; // чтобы не сыпал в терминал
         QImage* m_msgImageCache = nullptr;
+
+        QMutex m_mutex_draw; // close the door
+        QMutex m_mutex_draw_fast; // close the door
+        bool draw_overlay_run = false;
 private slots:
         void slot_fps_hardware_trigger();
 private Q_SLOTS:
